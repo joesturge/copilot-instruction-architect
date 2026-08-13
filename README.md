@@ -109,15 +109,6 @@ Instruction Architect is primarily guidance, but when used to make changes it sh
 - `.github/prompts/*.prompt.md` — explicitly user-invoked operations
 - `.github/agents/` — agent configuration (rare)
 
-## What the plugin does not do
-
-- No separate LLM API key
-- No model configuration
-- No direct `chat/completions` calls
-- No second reasoning context window
-- No autonomous semantic classification in TypeScript
-- No observation database or session-end processing
-
 ## WSL
 
 The plugin handles the [CLAUDE_PLUGIN_ROOT backslash bug](https://github.com/obra/superpowers/issues/2091) in Copilot Chat on WSL. Hook scripts normalise the path before use.
