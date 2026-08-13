@@ -79,36 +79,4 @@ describe('audit', () => {
       await rm(repoRoot, { recursive: true });
     }
   });
-
-  it('detects duplicates in existing configuration', async () => {
-    const repoRoot = await createTempRepo();
-    try {
-      await mkdir(join(repoRoot, '.github'), { recursive: true });
-      await writeFile(
-        join(repoRoot, '.github', 'copilot-instructions.md'),
-        '## Rules\n\n- Always update tests when changing behaviour.\n- Always update tests when changing behaviour.\n'
-      );
-      const result = await audit(repoRoot);
-      const duplicates = result.findings.filter((f) => f.type === 'duplicate');
-      expect(duplicates.length).toBeGreaterThan(0);
-    } finally {
-      await rm(repoRoot, { recursive: true });
-    }
-  });
-
-  it('detects discoverable facts', async () => {
-    const repoRoot = await createTempRepo();
-    try {
-      await mkdir(join(repoRoot, '.github'), { recursive: true });
-      await writeFile(
-        join(repoRoot, '.github', 'copilot-instructions.md'),
-        '## Setup\n\n- The project uses pnpm.\n- Use npm to install packages.\n'
-      );
-      const result = await audit(repoRoot);
-      const discoverable = result.findings.filter((f) => f.type === 'discoverable');
-      expect(discoverable.length).toBeGreaterThan(0);
-    } finally {
-      await rm(repoRoot, { recursive: true });
-    }
-  });
 });

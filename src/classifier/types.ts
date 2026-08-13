@@ -1,18 +1,3 @@
-/**
- * Classification categories for candidate knowledge.
- *
- * Prefer the simplest mechanism that provides the required behaviour.
- * See: classification engine specification.
- */
-export type Classification =
-  | 'NONE'
-  | 'GLOBAL_INSTRUCTION'
-  | 'PATH_INSTRUCTION'
-  | 'SKILL'
-  | 'PROMPT'
-  | 'AGENT'
-  | 'DOCUMENTATION_ONLY';
-
 export interface KnowledgeItem {
   /** Stable item id for dedupe/conflict analysis. */
   id?: string;
@@ -24,30 +9,16 @@ export interface KnowledgeItem {
   sourceType?: 'copilot' | 'instructions' | 'skill' | 'prompt' | 'agent' | 'external' | 'docs' | 'unknown';
   /** Glob pattern for path scoping, if applicable. */
   pathGlob?: string;
-  /** Inferred scope for this item. */
-  scope?: 'global' | 'path' | 'unknown';
-  /** How stable this guidance appears to be over time. */
-  stability?: 'high' | 'medium' | 'low';
-  /** Whether this guidance appears discoverable from repository sources. */
-  discoverability?: 'high' | 'medium' | 'low';
-  /** Estimated behavioural value to future agents. */
-  behaviouralValue?: 'high' | 'medium' | 'low';
-  /** Confidence in deterministic extraction quality. */
-  extractionConfidence?: number;
-  /** Related item ids, when known. */
-  relatedItems?: string[];
-  /** Source-of-truth evidence references. */
-  sourceOfTruth?: string[];
-  /** Why this item exists in the knowledge model. */
-  rationale?: string;
 }
 
-export interface ClassificationResult {
-  classification: Classification;
-  confidence: 'high' | 'medium' | 'low';
-  reason: string;
-  suggestedPath?: string;
-  suggestedPathGlob?: string;
+export interface RepositoryProfile {
+  packageManager?: string;
+  lockfiles: string[];
+  hasCiWorkflow: boolean;
+  ciFiles: string[];
+  testConfigFiles: string[];
+  copilotFiles: string[];
+  sourceOfTruthFiles: string[];
 }
 
 export interface AuditFinding {
@@ -71,36 +42,20 @@ export interface AuditResult {
   estimatedContextReduction?: number;
 }
 
-export interface RepositoryProfile {
-  packageManager?: string;
-  lockfiles: string[];
-  hasCiWorkflow: boolean;
-  ciFiles: string[];
-  testConfigFiles: string[];
-  copilotFiles: string[];
-  sourceOfTruthFiles: string[];
-}
+export type ProposalAction = 'create' | 'update' | 'delete';
 
-export interface DeterministicClassificationEvidence {
-  deterministicClassification: ClassificationResult;
-  duplicateSignals: AuditFinding[];
-  overlapSignals: AuditFinding[];
-  contradictionSignals: AuditFinding[];
-  discoverableSignals: AuditFinding[];
-  repoProfile: RepositoryProfile;
-}
-
-export interface SemanticClassificationResult {
-  classification: Classification;
-  confidence: number;
+export interface FileProposal {
+  action: ProposalAction;
+  /** Relative path within the repository (must start with .github/). */
+  path: string;
+  /** File content for create/update actions. */
+  content?: string;
+  /** applyTo glob for .github/instructions files. */
+  applyTo?: string;
   reason: string;
-  scope: string;
-  value: string;
-  contextCost: string;
-  maintenanceCost: string;
-  evidence: string[];
-  alternatives: Classification[];
-  suggestedPath?: string;
-  suggestedPathGlob?: string;
-  source: 'deterministic' | 'llm' | 'fallback';
+}
+
+export interface RepositoryProposal {
+  proposals: FileProposal[];
+  summary: string;
 }

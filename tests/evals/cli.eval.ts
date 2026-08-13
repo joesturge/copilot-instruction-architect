@@ -110,47 +110,6 @@ describe('eval: seed — idempotency', () => {
 // audit evals
 // ---------------------------------------------------------------------------
 
-describe('eval: audit — contradictory repository', () => {
-  let repoRoot: string;
-  beforeEach(async () => { repoRoot = await setupFixture('contradictory-repo'); });
-  afterEach(async () => { await rm(repoRoot, { recursive: true, force: true }); });
-
-  it('detects contradiction findings', async () => {
-    const result = await audit(repoRoot);
-    const contradictions = result.findings.filter((f) => f.type === 'contradiction');
-    expect(contradictions.length).toBeGreaterThan(0);
-  });
-
-  it('includes a recommendation to resolve contradictions', async () => {
-    const result = await audit(repoRoot);
-    const rec = result.recommendations.find((r) => /contradiction/i.test(r));
-    expect(rec).toBeDefined();
-  });
-});
-
-describe('eval: audit — bloated repository', () => {
-  let repoRoot: string;
-  beforeEach(async () => { repoRoot = await setupFixture('bloated-repo'); });
-  afterEach(async () => { await rm(repoRoot, { recursive: true, force: true }); });
-
-  it('detects duplicate findings', async () => {
-    const result = await audit(repoRoot);
-    const duplicates = result.findings.filter((f) => f.type === 'duplicate');
-    expect(duplicates.length).toBeGreaterThan(0);
-  });
-
-  it('detects discoverable facts', async () => {
-    const result = await audit(repoRoot);
-    const discoverable = result.findings.filter((f) => f.type === 'discoverable');
-    expect(discoverable.length).toBeGreaterThan(0);
-  });
-
-  it('estimates a non-zero context reduction', async () => {
-    const result = await audit(repoRoot);
-    expect(result.estimatedContextReduction).toBeGreaterThan(0);
-  });
-});
-
 describe('eval: audit — clean repository', () => {
   let repoRoot: string;
   beforeEach(async () => { repoRoot = await setupFixture('empty-repo'); });

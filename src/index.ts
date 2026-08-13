@@ -8,13 +8,12 @@
  *   seed       Bootstrap/migrate/normalise AI configuration
  *   audit      Analyse without modifying
  *   improve    Find and propose improvements
- *   classify   Classify a piece of knowledge
  *   review     Full review of AI configuration
  *   configure  Manage personal preferences
  *   baseline   Inspect baseline information
  */
 import { cwd } from 'node:process';
-import { seed, audit, improve, classifyOne, review } from './commands/commands.js';
+import { seed, audit, improve, review } from './commands/commands.js';
 import { getBaseline } from './baseline/baseline.js';
 import { loadState, saveState } from './state/state.js';
 
@@ -52,15 +51,6 @@ async function main(): Promise<void> {
       console.log(output);
       break;
     }
-    case 'classify': {
-      const content = args.join(' ');
-      if (!content.trim()) {
-        console.error('Usage: instruction-architect classify "<knowledge text>"');
-        process.exit(1);
-      }
-      console.log(await classifyOne(content));
-      break;
-    }
     case 'review': {
       const output = await review(repoRoot);
       console.log(output);
@@ -90,7 +80,7 @@ async function main(): Promise<void> {
     }
     default: {
       console.error(`Unknown command: ${command ?? '(none)'}`);
-      console.error('Available commands: seed, audit, improve, classify, review, configure, baseline');
+      console.error('Available commands: seed, audit, improve, review, configure, baseline');
       process.exit(1);
     }
   }

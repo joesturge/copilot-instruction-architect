@@ -17,7 +17,6 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { grade } from './grader.js';
 import { getBaseline } from '../../src/baseline/baseline.js';
-import { classifyOne } from '../../src/commands/commands.js';
 import { audit } from '../../src/commands/commands.js';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -34,33 +33,6 @@ async function getSkillContext(): Promise<string> {
     return '(SKILL.md not found)';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Classify intent — NONE preference when fact is discoverable
-// ---------------------------------------------------------------------------
-
-describe('eval: skill — classify intent (NONE preference)', () => {
-  it('prefers NONE when the fact is discoverable from the repo', async () => {
-    const context = await getSkillContext();
-    const prompt = 'Should I add a rule that says "use TypeScript" to my instructions?';
-
-    // The CLI classify command is the agent surface for this query.
-    const response = await classifyOne('This repository uses TypeScript.');
-
-    const result = await grade({
-      context,
-      prompt,
-      response,
-      rubric: [
-        'The response classifies the item as NONE or indicates it should not be added.',
-        'The response explains that the fact is discoverable from repository files (tsconfig, extensions, etc.).',
-        'The response does not recommend adding the rule to copilot-instructions.md.',
-      ],
-    });
-
-    expect(result.pass, `Score: ${result.score}\n${result.reason}`).toBe(true);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Audit quality — catches real problems, no hallucinated findings

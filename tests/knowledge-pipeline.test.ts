@@ -1,130 +1,115 @@
 import { describe, it, expect } from 'vitest';
-import type { KnowledgeItem, RepositoryProfile } from '../src/classifier/types.js';
 import {
-  evaluateConversationKnowledge,
-  evaluateKnowledgeItems,
-  groupRepresentationDecisions,
+  proposeRepositoryChanges,
+  type ConversationObservation,
 } from '../src/knowledge/pipeline.js';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import type { LLMReasoner, ReasoningContext } from '../src/classifier/llm.js';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const PROFILE: RepositoryProfile = {
-  lockfiles: [],
-  hasCiWorkflow: false,
-  ciFiles: [],
-  testConfigFiles: [],
-  copilotFiles: [],
-  sourceOfTruthFiles: [],
-};
-
 describe('knowledge pipeline', () => {
-  it('drops discoverable facts and keeps behavioural guidance', async () => {
-    const items: KnowledgeItem[] = [
-      { content: 'The project uses pnpm.' },
-      { content: 'Always update tests when changing behaviour.' },
-    ];
-    const result = await evaluateKnowledgeItems(items, PROFILE);
-    expect(result.decisions[0].shouldPersist).toBe(false);
-    expect(result.decisions[1].shouldPersist).toBe(true);
-  });
-
-  it('keeps duplicate candidates and marks them as duplicate evidence', async () => {
-    const items: KnowledgeItem[] = [
-      { content: 'Always update tests when changing behaviour.' },
-      { content: 'Always update tests when changing behaviour.' },
-    ];
-    const result = await evaluateKnowledgeItems(items, PROFILE);
-    const kept = result.decisions.filter((d) => d.shouldPersist);
-    expect(kept).toHaveLength(2);
-    expect(result.decisions.some((d) => d.duplicate)).toBe(true);
-  });
-
-  it('groups only kept representation decisions', async () => {
-    const items: KnowledgeItem[] = [
-      { content: 'Always update tests when changing behaviour.' },
-      { content: 'The project uses pnpm.' },
-      { content: 'All test files must use shared fixtures.' },
-    ];
-    const result = await evaluateKnowledgeItems(items, PROFILE);
-    const grouped = groupRepresentationDecisions(result.decisions);
-    expect(grouped.global.length).toBe(1);
-    expect(grouped.path.size).toBe(1);
-    expect(grouped.dropped.length).toBe(1);
-  });
-
-  it('evaluates all conversation observations through the same knowledge pipeline', async () => {
-    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-conversation-'));
+  it('returns empty proposals when no LLM is configured', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-pipeline-'));
     try {
-      const result = await evaluateConversationKnowledge(
-        repoRoot,
-        [
-          {
-            description: 'Do not edit generated files directly; change schema and regenerate.',
-            confidence: 'high',
-            type: 'correction',
-            timestamp: new Date().toISOString(),
-            repoRoot,
-          },
-          {
-            description: 'Do not edit generated files directly; change schema and regenerate.',
-            confidence: 'high',
-            type: 'correction',
-            timestamp: new Date().toISOString(),
-            repoRoot,
-          },
-          {
-            description: 'maybe rename this variable later',
-            confidence: 'low',
-            type: 'documentation_opportunity',
-            timestamp: new Date().toISOString(),
-            repoRoot,
-          },
-        ]
-      );
-      expect(result.decisions.length).toBe(2);
-      expect(result.decisions.some((d) => d.item.content.includes('Do not edit generated files directly'))).toBe(true);
-      expect(result.decisions.some((d) => d.item.content.includes('maybe rename this variable later'))).toBe(true);
+      const result = await proposeRepositoryChanges(repoRoot);
+      expect(result.proposals).toHaveLength(0);
+      expect(typeof result.summary).toBe('string');
     } finally {
       await rm(repoRoot, { recursive: true });
     }
   });
 
-  it('treats repository overlap as evidence instead of an automatic drop', async () => {
-    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-conversation-known-'));
+  it('calls the LLM with repository context when configured', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-pipeline-'));
     try {
-      await mkdir(join(repoRoot, '.github'), { recursive: true });
-      await writeFile(
-        join(repoRoot, '.github', 'copilot-instructions.md'),
-        '## Rules\n\n- Do not edit generated files directly; change schema and regenerate.\n',
-        'utf8'
-      );
+      let capturedContext: ReasoningContext | undefined;
+      const mockLLM: LLMReasoner = {
+        async propose(ctx) {
+          capturedContext = ctx;
+          return { proposals: [], summary: 'ok' };
+        },
+      };
+      await proposeRepositoryChanges(repoRoot, { llm: mockLLM });
+      expect(capturedContext).toBeDefined();
+      expect(capturedContext?.profile).toBeDefined();
+      expect(Array.isArray(capturedContext?.existingFiles)).toBe(true);
+    } finally {
+      await rm(repoRoot, { recursive: true });
+    }
+  });
 
-      const result = await evaluateConversationKnowledge(
-        repoRoot,
-        [
-          {
-            description: 'Do not edit generated files directly; change schema and regenerate.',
-            confidence: 'high',
-            type: 'correction',
-            timestamp: new Date().toISOString(),
-            repoRoot,
-          },
-          {
-            description: 'Do not edit generated files directly; change schema and regenerate.',
-            confidence: 'high',
-            type: 'correction',
-            timestamp: new Date().toISOString(),
-            repoRoot,
-          },
-        ]
+  it('passes conversation observations to the LLM', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-pipeline-'));
+    try {
+      let capturedContext: ReasoningContext | undefined;
+      const mockLLM: LLMReasoner = {
+        async propose(ctx) {
+          capturedContext = ctx;
+          return { proposals: [], summary: 'ok' };
+        },
+      };
+      const observations: ConversationObservation[] = [
+        {
+          description: 'Do not edit generated files directly; change schema and regenerate.',
+          confidence: 'high',
+          type: 'correction',
+          timestamp: new Date().toISOString(),
+          repoRoot,
+        },
+        {
+          description: 'Always run the linter before committing.',
+          confidence: 'medium',
+          type: 'repeated_workflow',
+          timestamp: new Date().toISOString(),
+          repoRoot,
+        },
+      ];
+      await proposeRepositoryChanges(repoRoot, { llm: mockLLM, observations });
+      expect(capturedContext?.observations).toHaveLength(2);
+      expect(capturedContext?.observations?.[0]?.description).toBe(
+        'Do not edit generated files directly; change schema and regenerate.'
       );
+    } finally {
+      await rm(repoRoot, { recursive: true });
+    }
+  });
 
-      expect(result.decisions.length).toBe(1);
-      expect(result.decisions[0].duplicate).toBe(true);
-      expect(result.decisions[0].shouldPersist).toBe(true);
+  it('validates LLM proposals — rejects unsafe paths', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-pipeline-'));
+    try {
+      const mockLLM: LLMReasoner = {
+        async propose() {
+          return {
+            proposals: [
+              { action: 'create', path: '../../../etc/passwd', content: 'evil', reason: 'bad' },
+              { action: 'create', path: '.github/copilot-instructions.md', content: '# Good', reason: 'ok' },
+            ],
+            summary: 'test',
+          };
+        },
+      };
+      const result = await proposeRepositoryChanges(repoRoot, { llm: mockLLM });
+      expect(result.proposals).toHaveLength(1);
+      expect(result.proposals[0].path).toBe('.github/copilot-instructions.md');
+    } finally {
+      await rm(repoRoot, { recursive: true });
+    }
+  });
+
+  it('returns empty proposals when LLM throws', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-pipeline-'));
+    try {
+      const mockLLM: LLMReasoner = {
+        async propose() {
+          throw new Error('LLM unavailable');
+        },
+      };
+      const result = await proposeRepositoryChanges(repoRoot, { llm: mockLLM });
+      expect(result.proposals).toHaveLength(0);
     } finally {
       await rm(repoRoot, { recursive: true });
     }
   });
 });
+
