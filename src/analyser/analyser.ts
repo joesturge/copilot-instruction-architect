@@ -30,6 +30,7 @@ export function extractKnowledgeFromMarkdown(
   sourceFile: string
 ): KnowledgeItem[] {
   const items: KnowledgeItem[] = [];
+  let extractedIndex = 0;
 
   // Extract the applyTo glob if present (instructions file front-matter).
   let pathGlob: string | undefined;
@@ -50,7 +51,7 @@ export function extractKnowledgeFromMarkdown(
     for (const line of lines) {
       const cleaned = line.replace(/^[-*•]\s+/, '').trim();
       if (cleaned.length > 10) {
-        const id = `${sourceFile}:${items.length}`;
+        const id = `${sourceFile}:${extractedIndex}`;
         items.push({
           id,
           content: cleaned,
@@ -64,6 +65,7 @@ export function extractKnowledgeFromMarkdown(
           extractionConfidence: 0.9,
           rationale: 'Extracted from existing repository guidance source.',
         });
+        extractedIndex++;
       }
     }
   }

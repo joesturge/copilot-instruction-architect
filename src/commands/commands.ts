@@ -153,7 +153,9 @@ export async function audit(repoRoot: string): Promise<AuditResult> {
 
   // Semantic review for ambiguous/high-value items using focused context.
   if (semanticClassifier) {
-    const ambiguousCandidates = items.slice(0, 8);
+    const ambiguousCandidates = items
+      .filter((item) => classify(item).confidence !== 'high')
+      .slice(0, 8);
     const semanticResults = await Promise.all(
       ambiguousCandidates.map((item) =>
         classifyHybrid(item, { semanticClassifier, allItems: items, repoProfile: profile })

@@ -109,8 +109,16 @@ function shouldEscalateToLLM(
     return false;
   }
 
-  // Escalate ambiguous or high-value behavioural guidance for semantic judgement.
-  if (deterministic.confidence !== 'high') return true;
+  const hasAmbiguitySignals =
+    evidence.duplicateSignals.length > 0 ||
+    evidence.overlapSignals.length > 0 ||
+    evidence.contradictionSignals.length > 0;
+  if (hasAmbiguitySignals) return true;
+
+  // Cheap deterministic filter: skip LLM when deterministic confidence is high and unambiguous.
+  if (deterministic.confidence === 'high') return false;
+
+  // Escalate medium/low confidence behavioural classifications for semantic judgement.
   if (['GLOBAL_INSTRUCTION', 'PATH_INSTRUCTION', 'SKILL', 'PROMPT', 'AGENT'].includes(deterministic.classification)) {
     return true;
   }
