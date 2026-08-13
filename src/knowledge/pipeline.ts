@@ -38,8 +38,12 @@ export async function proposeRepositoryChanges(
   }
 
   const existingFiles = await readExistingConfig(repoRoot);
+  const dedupedByPath = new Map<string, { path: string; content: string }>();
+  for (const file of existingFiles) dedupedByPath.set(file.path, file);
+  // Additional context should override same-path repository files intentionally.
+  for (const file of options.additionalContextFiles ?? []) dedupedByPath.set(file.path, file);
   const context: ReasoningContext = {
-    existingFiles: [...existingFiles, ...(options.additionalContextFiles ?? [])],
+    existingFiles: [...dedupedByPath.values()],
     observations: options.observations,
     preferences: options.preferences,
   };

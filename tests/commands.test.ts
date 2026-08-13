@@ -28,7 +28,13 @@ describe('seed', () => {
     const repoRoot = await createTempRepo();
     try {
       const firstRun = await seed(repoRoot);
+      await expect(
+        access(join(repoRoot, '.github', 'copilot-instructions.md'))
+      ).rejects.toThrow();
       const secondRun = await seed(repoRoot);
+      await expect(
+        access(join(repoRoot, '.github', 'copilot-instructions.md'))
+      ).rejects.toThrow();
       expect(firstRun).toBe(secondRun);
     } finally {
       await rm(repoRoot, { recursive: true });

@@ -4,7 +4,7 @@ import {
   type ConversationObservation,
 } from '../src/knowledge/pipeline.js';
 import type { LLMReasoner, ReasoningContext } from '../src/reasoner/llm.js';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -57,6 +57,34 @@ describe('knowledge pipeline', () => {
       expect(
         capturedContext?.existingFiles.some((f) => f.path === '__baseline_reference__')
       ).toBe(true);
+    } finally {
+      await rm(repoRoot, { recursive: true });
+    }
+  });
+
+  it('deduplicates context files by path when additional context overlaps existing files', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-pipeline-'));
+    try {
+      await mkdir(join(repoRoot, '.github'), { recursive: true });
+      await writeFile(join(repoRoot, '.github', 'copilot-instructions.md'), 'old content');
+      let capturedContext: ReasoningContext | undefined;
+      const mockLLM: LLMReasoner = {
+        async propose(ctx) {
+          capturedContext = ctx;
+          return { proposals: [], summary: 'ok' };
+        },
+      };
+      await proposeRepositoryChanges(repoRoot, {
+        llm: mockLLM,
+        additionalContextFiles: [
+          { path: '.github/copilot-instructions.md', content: 'override content' },
+        ],
+      });
+      const matchingFiles = capturedContext?.existingFiles.filter(
+        (f) => f.path === '.github/copilot-instructions.md'
+      ) ?? [];
+      expect(matchingFiles).toHaveLength(1);
+      expect(matchingFiles[0].content).toBe('override content');
     } finally {
       await rm(repoRoot, { recursive: true });
     }

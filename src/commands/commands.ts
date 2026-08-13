@@ -39,7 +39,7 @@ export async function seed(repoRoot: string): Promise<string> {
   });
 
   if (proposals.length === 0) {
-    lines.push(summary || 'No changes needed.');
+    lines.push(summary || 'No changes needed — configuration is already well-organised.');
     return lines.join('\n');
   }
 
