@@ -5,8 +5,8 @@
  * Usage: instruction-architect <command> [args]
  *
  * Commands:
- *   seed       Bootstrap/migrate/normalise AI configuration
- *   improve    Propose improvements to existing configuration
+ *   seed       Show Copilot-native seeding guidance
+ *   improve    Show Copilot-native improvement guidance
  *   review     List existing AI configuration files
  *   configure  Manage personal preferences
  *   baseline   Inspect baseline information

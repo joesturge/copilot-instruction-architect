@@ -2,21 +2,22 @@
 
 Improve a repository's GitHub Copilot AI configuration.
 
-The plugin's job is to remember what humans and agents learn. The LLM's job is to decide what is worth preserving, where it belongs, and when no change is appropriate.
+Instruction Architect is not a separate AI system. It teaches the current Copilot session how to improve the repository's instructions, skills, prompts, agents and supporting documentation using the current conversation and repository tools.
 
 ## Commands
 
 ### /instruction-architect seed
 
-Bootstrap, migrate, or improve AI configuration for this repository.
+Bootstrap, migrate, or restructure AI configuration for this repository using the current Copilot session.
 
-- Empty repository: writes the baseline directly
-- Repository with existing configuration: passes existing files and the baseline to the LLM, which decides how to combine, reorganise, or deduplicate — existing repository-specific knowledge is preserved
-- Safe to re-run; produces no change when configuration is already good
+- Review existing AI configuration and relevant docs before proposing changes.
+- Use the baseline as reference guidance, not something to copy wholesale.
+- Preserve repository-specific knowledge unless it is clearly wrong, duplicated, stale, or better represented elsewhere.
+- Choose the smallest useful representation: global instructions, applyTo-scoped instructions, a skill, a prompt, an agent, documentation, or no change.
 
 ### /instruction-architect improve
 
-Ask the LLM to review existing configuration and propose improvements. Requires LLM configuration.
+Review existing configuration and propose the smallest useful improvement using the active Copilot conversation.
 
 ### /instruction-architect review
 
@@ -44,9 +45,9 @@ Inspect the current baseline version and content.
 | Explicitly user-invoked operation | `.github/prompts/<name>.prompt.md` |
 | Already discoverable from repository files | Omit — do not add |
 
-## Principles for the LLM
+## Principles for Copilot
 
-When reasoning about what to persist:
+When reasoning about what to persist in the current Copilot session:
 
 - **Preserve existing knowledge.** Read all existing configuration before proposing changes. Never discard repository-specific guidance unless it is clearly wrong or duplicated.
 - **Prefer no change.** Only propose a change when there is a clear benefit. An empty proposal is often the correct outcome.
@@ -54,8 +55,8 @@ When reasoning about what to persist:
 - **Avoid duplication.** Do not add knowledge that already appears in existing configuration files.
 - **Prefer the smallest useful change.** Add, update, or reorganise only what is necessary.
 - **Ignore transient observations.** One-off debugging steps, task-specific details, temporary workarounds, and incidental implementation decisions do not belong in persistent configuration.
-- **Let the LLM decide.** Do not use heuristics or classifiers to pre-filter. The LLM reasons about all existing context and decides.
+- **Let Copilot decide.** Do not rely on plugin-side heuristics or classifiers to make semantic persistence decisions.
 
 ## Session learning
 
-At session end, accumulated observations are passed to the LLM alongside existing AI configuration. The LLM decides what is durable enough to persist. Without LLM reasoning, no observations are written automatically — raw observations are never turned into persistent instructions without LLM synthesis.
+At session end, the plugin may surface recent observations as a reminder. The active Copilot session decides whether any of them are durable enough to persist. Raw observations are never turned directly into persistent instructions automatically.

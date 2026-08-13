@@ -71,8 +71,7 @@ describe('session-end.sh', () => {
     );
   });
 
-  it('does NOT write raw observations without LLM in automatic mode', { skip: !runSh }, async () => {
-    // Without LLM reasoning, automatic mode must not persist raw observations.
+  it('shows a reminder and does not persist raw observations automatically', { skip: !runSh }, async () => {
     const home = await mkdtemp(join(tmpdir(), 'ia-home-'));
     const repoRoot = await mkdtemp(join(tmpdir(), 'ia-repo-'));
     try {
@@ -96,17 +95,18 @@ describe('session-end.sh', () => {
         'utf8'
       );
 
-      execSync(`sh "${join(HOOKS_DIR, 'session-end.sh')}"`, {
+      const output = execSync(`sh "${join(HOOKS_DIR, 'session-end.sh')}"`, {
         env: {
           ...process.env,
           HOME: home,
-          // No LLM API key set.
-          INSTRUCTION_ARCHITECT_LLM_API_KEY: '',
           CLAUDE_PLUGIN_ROOT: join(new URL('..', import.meta.url).pathname),
         },
         encoding: 'utf8',
         stdio: 'pipe',
       });
+
+      expect(output).toContain('Instruction Architect — Session reminder');
+      expect(output).toContain('Raw observations are never persisted automatically.');
 
       // The file must NOT have been created — raw observations must not be persisted.
       let fileExists = true;

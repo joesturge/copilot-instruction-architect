@@ -1,6 +1,6 @@
 /**
  * Session start hook — lightweight initialisation only.
- * Does not perform expensive repository analysis.
+ * Does not perform semantic repository analysis.
  */
 import { loadState } from '../state/state.js';
 

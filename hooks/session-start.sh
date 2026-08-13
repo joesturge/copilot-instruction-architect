@@ -14,9 +14,9 @@ else
     PLUGIN_ROOT=""
 fi
 
-# Lightweight session start — no expensive analysis here.
-# When Node.js is available and the compiled hook exists, delegate to it
-# for richer session-tracking behaviour.
+# Lightweight session start — no semantic analysis here.
+# When Node.js is available and the hook exists, delegate to it for any
+# minimal state initialisation.
 if command -v node >/dev/null 2>&1 && [ -n "$PLUGIN_ROOT" ] && [ -f "$PLUGIN_ROOT/node_modules/.bin/tsx" ]; then
     node "$PLUGIN_ROOT/node_modules/.bin/tsx" "$PLUGIN_ROOT/src/hooks/session-start.ts" 2>/dev/null || true
 fi

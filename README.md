@@ -1,10 +1,10 @@
 # Instruction Architect
 
-A GitHub Copilot plugin that remembers what you and your agents learn during development and turns durable knowledge into persistent AI configuration improvements.
+A GitHub Copilot plugin that teaches Copilot how to improve a repository's own instructions, skills, prompts, agents and supporting documentation.
 
 ## What it does
 
-Development sessions generate useful knowledge: corrections from the AI, repeated workflows, missing guidance that caused problems. Instruction Architect captures these observations and, at the end of a session, uses an LLM to decide what is worth persisting and where it belongs. The result is a small, targeted improvement to your repository's Copilot configuration.
+Development sessions generate useful knowledge: corrections from the AI, repeated workflows, missing guidance that caused problems. Instruction Architect helps the current Copilot session inspect that knowledge, inspect existing repository guidance, and decide what is worth persisting and where it belongs.
 
 Repositories with well-maintained AI configuration benefit all future contributors — including those who don't use the plugin themselves.
 
@@ -31,24 +31,24 @@ winget install OpenJS.NodeJS
 
 Session hooks (`sessionStart`, `sessionEnd`) are plain shell/PowerShell scripts and do not need Node.js.
 
-## LLM configuration
+## Architecture
 
-Session learning and the `seed`/`improve` commands use an LLM for reasoning.
+Instruction Architect does **not** call a separate LLM API.
 
-```sh
-export INSTRUCTION_ARCHITECT_LLM_API_KEY=sk-...
-export INSTRUCTION_ARCHITECT_LLM_MODEL=gpt-4o-mini   # default
-# optional:
-export INSTRUCTION_ARCHITECT_LLM_BASE_URL=https://api.openai.com/v1
-```
+It is a GitHub Copilot plugin, so the intended reasoning flow is:
 
-Any OpenAI-compatible API is supported.
+1. Copilot loads the plugin's skill and hooks
+2. Copilot inspects the current repository and conversation
+3. Copilot decides whether anything should persist
+4. Copilot makes or proposes the smallest useful repository change
+
+The plugin code stays thin. It provides baseline guidance, lightweight state, lifecycle hooks, and small helper commands. The semantic reasoning happens inside the active Copilot session.
 
 ## Commands
 
 ```sh
-instruction-architect seed       # bootstrap or improve AI configuration
-instruction-architect improve    # propose LLM-driven improvements
+instruction-architect seed       # show Copilot-native seeding guidance
+instruction-architect improve    # show Copilot-native improvement guidance
 instruction-architect review     # list existing AI configuration files
 instruction-architect configure  # manage personal preferences
 instruction-architect baseline   # inspect baseline version and content
@@ -56,14 +56,14 @@ instruction-architect baseline   # inspect baseline version and content
 
 ## How seed works
 
-`seed` is the main setup command. It always uses LLM reasoning:
+`seed` prepares the current Copilot session to bootstrap or restructure AI configuration:
 
-- It gathers existing repository AI configuration (if any)
-- It includes the baseline as reference input
-- It asks the LLM to produce a structured proposal
-- It validates proposal paths mechanically, then applies safe changes
+- It shows existing repository AI configuration (if any)
+- It shows the baseline version and preferences
+- It reminds Copilot to use the current conversation and repository tools
+- It focuses Copilot on making the smallest useful change
 
-This keeps the baseline as input knowledge rather than copying it wholesale into global instructions. The LLM decides what should be global, path-scoped, skill-based, prompt-based, or omitted entirely.
+This keeps the baseline as reference guidance rather than copying it wholesale into global instructions. Copilot decides what should be global, path-scoped, skill-based, prompt-based, agent-based, documented elsewhere, or omitted entirely.
 
 `seed` is safe to re-run. Running it a second time on an already well-configured repository should produce no changes.
 
@@ -71,26 +71,23 @@ This keeps the baseline as input knowledge rather than copying it wholesale into
 
 If your repository already has `.github/copilot-instructions.md` or other Copilot customisation, `seed` treats it as a migration/augmentation opportunity, not something to replace.
 
-With an LLM configured, the existing content is provided to the LLM alongside the baseline. The LLM decides what to keep, what to add, and what to reorganise. Your repository-specific knowledge is never silently discarded.
-
-Without an LLM, `seed` leaves existing files untouched and reports that an LLM is needed to merge them.
+The current Copilot session should review the existing content alongside the baseline and decide what to keep, what to add, and what to reorganise. Repository-specific knowledge should never be silently discarded.
 
 ## Session learning
 
-At the end of each session, the session hook:
+At the end of each session, the session hook can:
 
-1. Loads recent observations (recorded during the session by the Copilot agent)
-2. Passes them — alongside existing AI configuration — to the LLM
-3. The LLM decides what is durable and worth persisting, and where it belongs
-4. The resulting validated proposal is either applied or shown for review
+1. Load recent observations captured by the plugin
+2. Show them back to the active Copilot session as a reminder
+3. Prompt Copilot to decide whether any of them belong in persistent repository guidance
 
-The LLM is the filter. It ignores transient details, one-off debugging steps, already-discoverable facts, and information that belongs only to the current task. Only durable knowledge that would genuinely improve the future development experience of the repository is persisted.
+Copilot is the filter. It should ignore transient details, one-off debugging steps, already-discoverable facts, and information that belongs only to the current task. Only durable knowledge that would genuinely improve future development should be persisted.
 
-**Without an LLM, raw observations are never written directly to Copilot instructions.** Without reasoning, we cannot safely determine what is durable, relevant, or appropriate. In automatic mode without an LLM, the session hook does nothing and reports the limitation.
+**Raw observations are never written directly to Copilot instructions.** The hook does not perform autonomous reasoning or automatic repository edits.
 
 ## How improve works
 
-`instruction-architect improve` asks the LLM to review the existing configuration and propose targeted improvements — removing stale or discoverable content, reorganising instructions into the right mechanisms, or adding missing guidance. Requires `INSTRUCTION_ARCHITECT_LLM_API_KEY`.
+`instruction-architect improve` prepares the active Copilot session to review the existing configuration and propose targeted improvements — removing stale or discoverable content, reorganising instructions into the right mechanisms, or adding missing durable guidance.
 
 ## The baseline
 
@@ -106,7 +103,7 @@ The baseline is intentionally minimal. It only contains guidance that agents can
 
 ## What files the plugin may modify
 
-The plugin may only create, update, or delete files within these paths:
+Instruction Architect is primarily guidance, but when used to make changes it should focus on these paths:
 
 - `.github/copilot-instructions.md` — repository-wide Copilot guidance
 - `.github/instructions/*.instructions.md` — file-scoped guidance with `applyTo` globs
@@ -114,20 +111,18 @@ The plugin may only create, update, or delete files within these paths:
 - `.github/prompts/*.prompt.md` — explicitly user-invoked operations
 - `.github/agents/` — agent configuration (rare)
 
-All proposals are validated before application. Unsafe paths, path traversal, and null-byte tricks are rejected mechanically.
-
 ## Autonomy modes
 
 Configure how the session hook behaves:
 
 ```sh
-instruction-architect configure autonomy suggest    # default: show proposals, don't apply
+instruction-architect configure autonomy suggest    # default: show session reminders
 instruction-architect configure autonomy review     # same as suggest
-instruction-architect configure autonomy automatic  # apply proposals automatically
+instruction-architect configure autonomy automatic  # legacy alias; still keeps reasoning in-session
 instruction-architect configure autonomy disabled   # session hook does nothing
 ```
 
-In `suggest`/`review` mode, proposals are printed at session end for manual review. In `automatic` mode, validated proposals are applied immediately. Without an LLM, `automatic` mode does nothing and reports the limitation.
+In all modes, semantic reasoning remains in the active Copilot session. `disabled` suppresses hook reminders entirely.
 
 ## Personal preferences
 
@@ -136,7 +131,7 @@ instruction-architect configure language en-GB   # documentation language
 instruction-architect configure style formal     # writing style
 ```
 
-Preferences are included in the LLM reasoning context where relevant.
+Preferences are included in the plugin's guidance output where relevant.
 
 View current preferences:
 
@@ -146,27 +141,26 @@ instruction-architect configure
 
 ## Reviewing changes
 
-In `suggest`/`review` mode, proposals are printed at session end. Review them, then apply manually if appropriate:
+Use the skill and commands to review what exists, then decide in the active Copilot session whether to make changes:
 
 ```sh
 # see what exists
 instruction-architect review
 
-# apply a proposed improvement
+# show improvement guidance for the current session
 instruction-architect improve
 ```
 
 Changes can also be reviewed in your normal git workflow: `git diff`, `git status`.
 
-## If LLM reasoning is unavailable
+## What the plugin does not do
 
-Without `INSTRUCTION_ARCHITECT_LLM_API_KEY`:
-
-- `seed` reports that an LLM is required and makes no repository changes
-- `improve` reports that an LLM is needed
-- Session hook in `suggest`/`review` mode shows observations for manual consideration
-- Session hook in `automatic` mode does nothing and reports the limitation
-- No observations are ever written directly to Copilot instructions
+- No separate LLM API key
+- No model configuration
+- No direct `chat/completions` calls
+- No second reasoning context window
+- No autonomous semantic classification in TypeScript
+- No automatic persistence of raw observations
 
 ## WSL
 

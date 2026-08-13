@@ -1,21 +1,10 @@
 /**
- * Session end hook — process accumulated observations through the LLM and
- * persist any durable learning as AI configuration changes.
+ * Session end hook — surface lightweight reminders from stored observations.
  *
- * Flow: observations → LLM → structured proposal → mechanical validation → apply
- *
- * When no LLM is configured:
- *   - suggest/review mode: prints observations for manual consideration
- *   - automatic mode: reports that LLM is required and does nothing
- *   Raw observations are NEVER written directly to Copilot instructions.
- *   Without LLM reasoning we cannot determine what is durable, relevant,
- *   or appropriate for persistent configuration.
+ * Semantic reasoning remains in the active Copilot session. The hook does not
+ * invoke another model or apply repository changes automatically.
  */
 import { loadState } from '../state/state.js';
-import { createLLMReasonerFromEnv } from '../reasoner/llm.js';
-import { proposeRepositoryChanges } from '../knowledge/pipeline.js';
-import type { ConversationObservation } from '../knowledge/pipeline.js';
-import { applyProposal } from '../commands/commands.js';
 
 async function main(): Promise<void> {
   const state = await loadState();
@@ -35,59 +24,16 @@ async function main(): Promise<void> {
   const repoRoot = latest?.repoRoot;
   if (!repoRoot) return;
 
-  const repoObservations: ConversationObservation[] = recentObservations.filter(
+  const repoObservations = recentObservations.filter(
     (o) => o.repoRoot === repoRoot
   );
 
-  const llm = createLLMReasonerFromEnv();
-  const preferences = {
-    language: state.preferences.language,
-    style: state.preferences.style,
-  };
-
-  if (llm) {
-    // Full pipeline: context → LLM → structured proposal → apply.
-    const { proposals, summary } = await proposeRepositoryChanges(repoRoot, {
-      llm,
-      observations: repoObservations,
-      preferences,
-    });
-    if (proposals.length === 0) return;
-
-    if (state.preferences.autonomy === 'automatic') {
-      for (const proposal of proposals) {
-        await applyProposal(repoRoot, proposal);
-      }
-      console.log('\nInstruction Architect — Session knowledge applied:\n');
-      for (const proposal of proposals) {
-        console.log(`  ✓ ${proposal.path}`);
-      }
-    } else {
-      console.log('\nInstruction Architect — Session knowledge proposals:\n');
-      for (const proposal of proposals) {
-        console.log(`  [${proposal.action}] ${proposal.path}: ${proposal.reason}`);
-      }
-      if (summary) console.log(`\n  ${summary}`);
-      console.log('\nRun `instruction-architect configure autonomy automatic` to apply these proposals automatically.');
-    }
-    return;
-  }
-
-  // No LLM configured.
-  if (state.preferences.autonomy === 'automatic') {
-    // Cannot safely determine what to persist without LLM reasoning.
-    console.log('\nInstruction Architect — Session learning skipped:\n');
-    console.log('  LLM reasoning is required to safely determine what knowledge is worth persisting.');
-    console.log('  Set INSTRUCTION_ARCHITECT_LLM_API_KEY to enable session learning.');
-    return;
-  }
-
-  // suggest/review mode: show observations for manual consideration only.
-  console.log('\nInstruction Architect — Observations from this session:\n');
+  console.log('\nInstruction Architect — Session reminder:\n');
   for (const obs of repoObservations.slice(0, 12)) {
     console.log(`  [${obs.type}] ${obs.description}`);
   }
-  console.log('\nSet INSTRUCTION_ARCHITECT_LLM_API_KEY to enable automatic reasoning and learning.');
+  console.log('\nUse the current Copilot conversation and the instruction-architect skill to decide whether any of this belongs in instructions, skills, prompts, agents, documentation, or nowhere.');
+  console.log('Raw observations are never persisted automatically.');
 }
 
 main().catch(() => {

@@ -1,92 +1,62 @@
-import { mkdir, writeFile, unlink } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
-import { createLLMReasonerFromEnv } from '../reasoner/llm.js';
 import { getBaseline } from '../baseline/baseline.js';
-import type { FileProposal } from '../reasoner/types.js';
-import { proposeRepositoryChanges } from '../knowledge/pipeline.js';
 import { readExistingConfig } from '../analyser/analyser.js';
 import { loadState } from '../state/state.js';
 
 /**
- * seed — bootstrap, migrate, and normalise AI configuration.
- *
- * Passes existing configuration plus the baseline reference through the same
- * LLM reasoning pipeline used for repository improvements, then applies the
- * validated proposal.
+ * seed — prepare the current Copilot session to seed or restructure the
+ * repository's AI configuration.
  */
 export async function seed(repoRoot: string): Promise<string> {
-  const llm = createLLMReasonerFromEnv();
   const baseline = getBaseline();
+  const existingFiles = await readExistingConfig(repoRoot);
   const state = await loadState();
   const lines: string[] = ['# Instruction Architect — Seed\n'];
 
-  if (!llm) {
-    lines.push('LLM reasoning is required for seed to architect baseline guidance into repository configuration.');
-    lines.push('Set INSTRUCTION_ARCHITECT_LLM_API_KEY to enable seed.');
-    return lines.join('\n');
-  }
-
-  const { proposals, summary } = await proposeRepositoryChanges(repoRoot, {
-    llm,
-    observations: [],
-    preferences: { language: state.preferences.language, style: state.preferences.style },
-    additionalContextFiles: [
-      {
-        path: '__baseline_reference__ (standard baseline — not a real file)',
-        content: baseline.globalInstructions,
-      },
-    ],
-  });
-
-  if (proposals.length === 0) {
-    lines.push(summary || 'No changes needed — configuration is already well-organised.');
-    return lines.join('\n');
-  }
-
-  for (const proposal of proposals) {
-    await applyProposal(repoRoot, proposal);
-    lines.push(`✓ ${proposal.action} ${proposal.path}`);
-  }
-
-  if (summary) {
-    lines.push('');
-    lines.push(summary);
-  }
+  lines.push('Instruction Architect uses the current Copilot session for reasoning.');
+  lines.push('No separate LLM API, model, or second context window is used.\n');
+  lines.push(`Baseline version: ${baseline.version}`);
+  lines.push(`Configured preferences: language=${state.preferences.language}, style=${state.preferences.style}\n`);
+  appendExistingFiles(lines, existingFiles);
+  lines.push('In the current Copilot conversation:');
+  lines.push('1. Review the existing AI configuration files and any relevant repository documentation.');
+  lines.push('2. Use the baseline as reference guidance, not something to copy wholesale.');
+  lines.push('3. Decide whether any durable guidance is worth persisting.');
+  lines.push('4. Choose the smallest useful representation: global instructions, applyTo-scoped instructions, a skill, a prompt, an agent, documentation, or no change.');
+  lines.push('5. Preserve valid repository-specific guidance and avoid discoverable, duplicated, or transient content.');
 
   return lines.join('\n');
 }
 
 /**
- * improve — propose LLM-driven improvements to existing configuration.
+ * improve — prepare the current Copilot session to review existing
+ * configuration and propose the smallest useful improvement.
  */
 export async function improve(repoRoot: string): Promise<string> {
-  const llm = createLLMReasonerFromEnv();
-  const state = await loadState();
+  const [state, existingFiles] = await Promise.all([
+    loadState(),
+    readExistingConfig(repoRoot),
+  ]);
   const lines: string[] = ['# Instruction Architect — Improvement Proposals\n'];
+  const recentObservations = getRecentObservationsForRepo(state, repoRoot);
 
-  if (!llm) {
-    lines.push('Set INSTRUCTION_ARCHITECT_LLM_API_KEY to enable LLM-powered analysis.');
-    return lines.join('\n');
-  }
+  lines.push('Instruction Architect does not run a separate LLM for improvement analysis.');
+  lines.push('Use the active Copilot conversation, current repository context, and the instruction-architect skill.\n');
+  appendExistingFiles(lines, existingFiles);
 
-  const { proposals, summary } = await proposeRepositoryChanges(repoRoot, {
-    llm,
-    preferences: { language: state.preferences.language, style: state.preferences.style },
-  });
-
-  if (proposals.length === 0) {
-    lines.push(summary || 'No improvements found.');
-    return lines.join('\n');
-  }
-
-  for (const proposal of proposals) {
-    lines.push(`- **${proposal.action}** \`${proposal.path}\`: ${proposal.reason}`);
-  }
-
-  if (summary) {
+  if (recentObservations.length > 0) {
+    lines.push(`## Recent observations (${recentObservations.length})`);
+    for (const obs of recentObservations.slice(0, 12)) {
+      lines.push(`- [${obs.type}] ${obs.description}`);
+    }
     lines.push('');
-    lines.push(summary);
   }
+
+  lines.push(`Configured preferences: language=${state.preferences.language}, style=${state.preferences.style}\n`);
+  lines.push('Review the current configuration and decide whether to:');
+  lines.push('- remove duplicated, contradictory, stale, or discoverable content');
+  lines.push('- move guidance into a better representation or scope');
+  lines.push('- add missing durable guidance only when it will help future work');
+  lines.push('- leave the repository unchanged when no meaningful improvement is needed');
 
   return lines.join('\n');
 }
@@ -105,21 +75,26 @@ export async function review(repoRoot: string): Promise<string> {
   return lines.join('\n');
 }
 
-/**
- * Apply a single file proposal to the repository.
- * Path safety is enforced by isSafePath at proposal validation time.
- */
-export async function applyProposal(repoRoot: string, proposal: FileProposal): Promise<void> {
-  const path = join(repoRoot, proposal.path);
-  if (proposal.action === 'delete') {
-    await unlink(path).catch(() => { /* ignore if not found */ });
+function appendExistingFiles(
+  lines: string[],
+  existingFiles: Array<{ path: string; content: string }>
+): void {
+  if (existingFiles.length === 0) {
+    lines.push('Existing AI configuration files: none found.\n');
     return;
   }
-  const content = proposal.content ?? '';
-  await mkdir(dirname(path), { recursive: true });
-  if (proposal.applyTo) {
-    await writeFile(path, `---\napplyTo: '${proposal.applyTo}'\n---\n\n${content}`, 'utf8');
-  } else {
-    await writeFile(path, content, 'utf8');
-  }
+
+  lines.push(`Existing AI configuration files (${existingFiles.length}):`);
+  for (const file of existingFiles) lines.push(`- ${file.path}`);
+  lines.push('');
+}
+
+function getRecentObservationsForRepo(
+  state: Awaited<ReturnType<typeof loadState>>,
+  repoRoot: string
+) {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  return state.observations.filter(
+    (obs) => obs.repoRoot === repoRoot && new Date(obs.timestamp).getTime() >= cutoff
+  );
 }
