@@ -12,15 +12,19 @@ async function main(): Promise<void> {
   const state = await loadState();
   if (state.preferences.autonomy === 'disabled') return;
 
-  if (state.observations.length === 0) return;
+  const recentObservations = state.observations.filter((o) => {
+    const age = Date.now() - new Date(o.timestamp).getTime();
+    return age < 24 * 60 * 60 * 1000; // last 24 hours
+  });
+  if (recentObservations.length === 0) return;
 
   const semanticClassifier = createSemanticClassifierFromEnv();
-  const latest = [...state.observations].sort(
+  const latest = [...recentObservations].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   )[0];
   const repoRoot = latest?.repoRoot;
   if (!repoRoot) return;
-  const repoObservations = state.observations.filter((o) => o.repoRoot === repoRoot);
+  const repoObservations = recentObservations.filter((o) => o.repoRoot === repoRoot);
 
   const evaluated = await evaluateConversationKnowledge(repoRoot, repoObservations, {
     semanticClassifier,
