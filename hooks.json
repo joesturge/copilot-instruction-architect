@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "PLUGIN_ROOT=$(printf '%s' \"${CLAUDE_PLUGIN_ROOT}\" | sed 's|\\\\|/|g'); sh \"$PLUGIN_ROOT/hooks/session-start.sh\"",
+        "powershell": "& (Join-Path $env:CLAUDE_PLUGIN_ROOT 'hooks\\session-start.ps1')",
+        "timeoutSec": 10
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "PLUGIN_ROOT=$(printf '%s' \"${CLAUDE_PLUGIN_ROOT}\" | sed 's|\\\\|/|g'); sh \"$PLUGIN_ROOT/hooks/session-end.sh\"",
+        "powershell": "& (Join-Path $env:CLAUDE_PLUGIN_ROOT 'hooks\\session-end.ps1')",
+        "timeoutSec": 30
+      }
+    ]
+  }
+}

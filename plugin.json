@@ -1,0 +1,14 @@
+{
+  "name": "instruction-architect",
+  "description": "Remembers what you and your agents learn during development and turns durable knowledge into persistent AI configuration improvements. Provides memory, context gathering, LLM reasoning, persistence and mechanical safety for Copilot configuration.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Joe Sturge",
+    "url": "https://github.com/joesturge"
+  },
+  "repository": "https://github.com/joesturge/copilot-instruction-architect",
+  "license": "MIT",
+  "keywords": ["copilot", "instructions", "ai-config", "optimisation"],
+  "skills": ["skills/"],
+  "hooks": "hooks.json"
+}
