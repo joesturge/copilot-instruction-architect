@@ -46,6 +46,5 @@ The plugin handles the [CLAUDE_PLUGIN_ROOT backslash bug](https://github.com/obr
 ```sh
 npm install
 npm run lint    # type check
-npm run build   # compile TypeScript → dist/
 npm test        # run 40 tests
 ```

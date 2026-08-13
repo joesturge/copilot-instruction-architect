@@ -5,9 +5,10 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 $pluginRoot = $env:CLAUDE_PLUGIN_ROOT
 if ($pluginRoot -and (Get-Command node -ErrorAction SilentlyContinue)) {
-    $hookScript = Join-Path $pluginRoot 'dist\hooks\session-end.js'
-    if (Test-Path $hookScript) {
-        & node $hookScript 2>$null
+    $tsxBin = Join-Path $pluginRoot 'node_modules\.bin\tsx'
+    $hookScript = Join-Path $pluginRoot 'src\hooks\session-end.ts'
+    if ((Test-Path $tsxBin) -and (Test-Path $hookScript)) {
+        & node $tsxBin $hookScript 2>$null
     }
 }
 

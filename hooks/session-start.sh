@@ -17,8 +17,8 @@ fi
 # Lightweight session start — no expensive analysis here.
 # When Node.js is available and the compiled hook exists, delegate to it
 # for richer session-tracking behaviour.
-if command -v node >/dev/null 2>&1 && [ -n "$PLUGIN_ROOT" ] && [ -f "$PLUGIN_ROOT/dist/hooks/session-start.js" ]; then
-    node "$PLUGIN_ROOT/dist/hooks/session-start.js" 2>/dev/null || true
+if command -v node >/dev/null 2>&1 && [ -n "$PLUGIN_ROOT" ] && [ -f "$PLUGIN_ROOT/node_modules/.bin/tsx" ]; then
+    node "$PLUGIN_ROOT/node_modules/.bin/tsx" "$PLUGIN_ROOT/src/hooks/session-start.ts" 2>/dev/null || true
 fi
 
 # Always exit successfully — a hook must never crash the session.

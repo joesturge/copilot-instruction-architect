@@ -17,8 +17,8 @@ fi
 # At session end, run the Node.js analysis if available.
 # This defers expensive analysis until the session is complete so it does
 # not interrupt the development flow.
-if command -v node >/dev/null 2>&1 && [ -n "$PLUGIN_ROOT" ] && [ -f "$PLUGIN_ROOT/dist/hooks/session-end.js" ]; then
-    node "$PLUGIN_ROOT/dist/hooks/session-end.js" 2>/dev/null || true
+if command -v node >/dev/null 2>&1 && [ -n "$PLUGIN_ROOT" ] && [ -f "$PLUGIN_ROOT/node_modules/.bin/tsx" ]; then
+    node "$PLUGIN_ROOT/node_modules/.bin/tsx" "$PLUGIN_ROOT/src/hooks/session-end.ts" 2>/dev/null || true
 fi
 
 # Always exit successfully — a hook must never crash the session.
