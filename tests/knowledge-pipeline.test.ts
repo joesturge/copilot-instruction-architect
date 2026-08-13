@@ -29,14 +29,15 @@ describe('knowledge pipeline', () => {
     expect(result.decisions[1].shouldPersist).toBe(true);
   });
 
-  it('deduplicates canonical knowledge during representation decisions', async () => {
+  it('keeps duplicate candidates and marks them as duplicate evidence', async () => {
     const items: KnowledgeItem[] = [
       { content: 'Always update tests when changing behaviour.' },
       { content: 'Always update tests when changing behaviour.' },
     ];
     const result = await evaluateKnowledgeItems(items, PROFILE);
     const kept = result.decisions.filter((d) => d.shouldPersist);
-    expect(kept).toHaveLength(1);
+    expect(kept).toHaveLength(2);
+    expect(result.decisions.some((d) => d.duplicate)).toBe(true);
   });
 
   it('groups only kept representation decisions', async () => {
@@ -52,7 +53,7 @@ describe('knowledge pipeline', () => {
     expect(grouped.dropped.length).toBe(1);
   });
 
-  it('only proposes durable conversation knowledge not single low-signal observations', async () => {
+  it('evaluates all conversation observations through the same knowledge pipeline', async () => {
     const repoRoot = await mkdtemp(join(tmpdir(), 'ia-conversation-'));
     try {
       const result = await evaluateConversationKnowledge(
@@ -81,14 +82,15 @@ describe('knowledge pipeline', () => {
           },
         ]
       );
-      expect(result.decisions.length).toBe(1);
-      expect(result.decisions[0].shouldPersist).toBe(true);
+      expect(result.decisions.length).toBe(2);
+      expect(result.decisions.some((d) => d.item.content.includes('Do not edit generated files directly'))).toBe(true);
+      expect(result.decisions.some((d) => d.item.content.includes('maybe rename this variable later'))).toBe(true);
     } finally {
       await rm(repoRoot, { recursive: true });
     }
   });
 
-  it('drops conversation knowledge already represented in repository guidance', async () => {
+  it('treats repository overlap as evidence instead of an automatic drop', async () => {
     const repoRoot = await mkdtemp(join(tmpdir(), 'ia-conversation-known-'));
     try {
       await mkdir(join(repoRoot, '.github'), { recursive: true });
@@ -119,7 +121,8 @@ describe('knowledge pipeline', () => {
       );
 
       expect(result.decisions.length).toBe(1);
-      expect(result.decisions[0].shouldPersist).toBe(false);
+      expect(result.decisions[0].duplicate).toBe(true);
+      expect(result.decisions[0].shouldPersist).toBe(true);
     } finally {
       await rm(repoRoot, { recursive: true });
     }

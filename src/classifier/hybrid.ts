@@ -59,7 +59,7 @@ export async function classifyHybrid(
     options.precomputedSignals,
   );
 
-  if (!shouldEscalateToLLM(item, evidence) || !options.semanticClassifier) {
+  if (!options.semanticClassifier || !item.content.trim()) {
     return fromDeterministic(item, evidence);
   }
 
@@ -117,39 +117,6 @@ export async function classifyAllHybrid(
   const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
   await Promise.all(workers);
   return results;
-}
-
-function shouldEscalateToLLM(
-  item: KnowledgeItem,
-  evidence: DeterministicClassificationEvidence
-): boolean {
-  const deterministic = evidence.deterministicClassification;
-  if (!item.content.trim()) return false;
-
-  // Obvious discoverable/no-op cases stay deterministic to avoid unnecessary cost.
-  if (
-    deterministic.classification === 'NONE' &&
-    deterministic.confidence === 'high' &&
-    evidence.discoverableSignals.length > 0
-  ) {
-    return false;
-  }
-
-  const hasAmbiguitySignals =
-    evidence.duplicateSignals.length > 0 ||
-    evidence.overlapSignals.length > 0 ||
-    evidence.contradictionSignals.length > 0;
-  if (hasAmbiguitySignals) return true;
-
-  // Cheap deterministic filter: skip LLM when deterministic confidence is high and unambiguous.
-  if (deterministic.confidence === 'high') return false;
-
-  // Escalate medium/low confidence behavioural classifications for semantic judgement.
-  if (['GLOBAL_INSTRUCTION', 'PATH_INSTRUCTION', 'SKILL', 'PROMPT', 'AGENT'].includes(deterministic.classification)) {
-    return true;
-  }
-
-  return false;
 }
 
 function fromDeterministic(
@@ -227,11 +194,17 @@ function deterministicEvidenceSummary(evidence: DeterministicClassificationEvide
   if (evidence.repoProfile.sourceOfTruthFiles.length > 0) {
     out.push(`Source-of-truth files: ${evidence.repoProfile.sourceOfTruthFiles.join(', ')}`);
   }
-  if (evidence.duplicateSignals.length > 0) out.push(`Possible duplicates: ${evidence.duplicateSignals.length}`);
-  if (evidence.overlapSignals.length > 0) out.push(`Possible overlaps: ${evidence.overlapSignals.length}`);
-  if (evidence.contradictionSignals.length > 0) out.push(`Possible contradictions: ${evidence.contradictionSignals.length}`);
-  if (evidence.discoverableSignals.length > 0) out.push('Likely discoverable fact detected.');
+  pushSignalEvidence(out, 'Duplicate evidence', evidence.duplicateSignals);
+  pushSignalEvidence(out, 'Overlap evidence', evidence.overlapSignals);
+  pushSignalEvidence(out, 'Contradiction evidence', evidence.contradictionSignals);
+  pushSignalEvidence(out, 'Discoverable evidence', evidence.discoverableSignals);
   return out;
+}
+
+function pushSignalEvidence(out: string[], label: string, findings: AuditFinding[]): void {
+  for (const finding of findings.slice(0, 2)) {
+    out.push(`${label}: ${finding.description}`);
+  }
 }
 
 function collectAlternatives(chosen: Classification): Classification[] {

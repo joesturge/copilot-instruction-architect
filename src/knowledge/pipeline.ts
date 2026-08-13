@@ -9,7 +9,6 @@ import { classifyAllHybrid } from '../classifier/hybrid.js';
 import type { SemanticClassifier } from '../classifier/hybrid.js';
 import type {
   AuditFinding,
-  Classification,
   KnowledgeItem,
   RepositoryProfile,
   SemanticClassificationResult,
@@ -92,7 +91,6 @@ export async function evaluateKnowledgeItems(
     repoProfile: profile,
   });
 
-  const seenCanonical = new Set<string>();
   const decisions: KnowledgeRepresentationDecision[] = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
@@ -100,24 +98,15 @@ export async function evaluateKnowledgeItems(
     const itemIsDiscoverable = hasSignal(item, discoverable);
     const itemIsDuplicate = hasSignal(item, duplicates);
     const itemHasConflict = hasSignal(item, contradictions);
-    const canonical = canonicalKey(item, semantic.classification);
-    const alreadyIncluded = seenCanonical.has(canonical);
-
     const shouldPersist =
-      !itemIsDiscoverable &&
-      !itemHasConflict &&
-      !alreadyIncluded &&
-      semantic.classification !== 'NONE' &&
-      semantic.classification !== 'DOCUMENTATION_ONLY';
-
-    seenCanonical.add(canonical);
+      semantic.classification !== 'NONE' && semantic.classification !== 'DOCUMENTATION_ONLY';
 
     decisions.push({
       item,
       semantic,
       shouldPersist,
       conflict: itemHasConflict,
-      duplicate: itemIsDuplicate || alreadyIncluded,
+      duplicate: itemIsDuplicate,
       discoverable: itemIsDiscoverable,
     });
   }
@@ -196,33 +185,24 @@ function extractConversationKnowledge(observations: ConversationObservation[]): 
   const items: KnowledgeItem[] = [];
   let index = 0;
   for (const { sample, count } of grouped.values()) {
-    if (!isDurableObservation(sample, count)) continue;
     items.push({
       id: `conversation:${index++}`,
       content: sample.description,
       sourceType: 'external',
       sourceFile: '[conversation]',
       scope: 'unknown',
-      stability: count >= 2 || sample.type === 'repeated_workflow' ? 'high' : 'medium',
+      stability: count >= 2 ? 'high' : 'medium',
       discoverability: 'low',
-      behaviouralValue:
-        sample.type === 'security_issue' || sample.type === 'repeated_failure' ? 'high' : 'medium',
+      behaviouralValue: sample.type === 'security_issue' ? 'high' : 'medium',
       extractionConfidence: sample.confidence === 'high' ? 0.9 : sample.confidence === 'medium' ? 0.7 : 0.5,
-      rationale: count >= 2 ? 'Repeated conversation knowledge.' : 'High-confidence conversation observation.',
+      relatedItems: [`observation_count:${count}`, `observation_type:${sample.type}`],
+      rationale:
+        count >= 2
+          ? `Observed repeatedly in conversation (${count} mentions).`
+          : 'Observed once in conversation; persistence depends on semantic value.',
     });
   }
   return items;
-}
-
-function isDurableObservation(observation: ConversationObservation, count: number): boolean {
-  if (count >= 2) return true;
-  if (observation.type === 'repeated_failure' || observation.type === 'repeated_workflow') return true;
-  if (observation.confidence !== 'high') return false;
-  return observation.type === 'security_issue' || observation.type === 'missing_guidance';
-}
-
-function canonicalKey(item: KnowledgeItem, classification: Classification): string {
-  return `${classification}:${item.pathGlob ?? ''}:${normalise(item.content)}`;
 }
 
 function normalise(text: string): string {

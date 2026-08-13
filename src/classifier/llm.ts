@@ -84,6 +84,8 @@ function buildPrompt(request: SemanticClassifierRequest): string {
       deterministicEvidence: request.evidence,
       relatedItems: request.relatedItems,
       instructions: [
+        'Treat duplicate/overlap/contradiction/discoverable signals as evidence, not automatic truth.',
+        'Decide what the repository should remember and how it should be represented based on the full evidence.',
         'Prefer NONE if discoverable and not behaviourally valuable.',
         'Distinguish facts from durable behavioural guidance.',
         'Use PATH_INSTRUCTION only when file/path scoping is justified.',
