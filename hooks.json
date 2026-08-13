@@ -4,16 +4,16 @@
     "sessionStart": [
       {
         "type": "command",
-        "bash": "node dist/hooks/session-start.js 2>/dev/null || true",
-        "powershell": "if (Test-Path dist/hooks/session-start.js) { node dist/hooks/session-start.js 2>$null }",
+        "bash": "PLUGIN_ROOT=$(printf '%s' \"${CLAUDE_PLUGIN_ROOT}\" | sed 's|\\\\|/|g'); sh \"$PLUGIN_ROOT/hooks/session-start.sh\"",
+        "powershell": "& (Join-Path $env:CLAUDE_PLUGIN_ROOT 'hooks\\session-start.ps1')",
         "timeoutSec": 10
       }
     ],
     "sessionEnd": [
       {
         "type": "command",
-        "bash": "node dist/hooks/session-end.js 2>/dev/null || true",
-        "powershell": "if (Test-Path dist/hooks/session-end.js) { node dist/hooks/session-end.js 2>$null }",
+        "bash": "PLUGIN_ROOT=$(printf '%s' \"${CLAUDE_PLUGIN_ROOT}\" | sed 's|\\\\|/|g'); sh \"$PLUGIN_ROOT/hooks/session-end.sh\"",
+        "powershell": "& (Join-Path $env:CLAUDE_PLUGIN_ROOT 'hooks\\session-end.ps1')",
         "timeoutSec": 30
       }
     ]

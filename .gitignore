@@ -3,3 +3,6 @@ dist/
 *.tsbuildinfo
 .DS_Store
 *.log
+sea-prep.blob
+instruction-architect
+instruction-architect.exe
