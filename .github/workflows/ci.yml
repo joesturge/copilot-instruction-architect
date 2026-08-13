@@ -29,7 +29,6 @@ jobs:
       - name: Verify hook scripts are executable
         run: |
           test -x hooks/session-start.sh || (echo "hooks/session-start.sh is not executable" && exit 1)
-          test -x hooks/session-end.sh   || (echo "hooks/session-end.sh is not executable" && exit 1)
 
       - name: Test
         run: npm test

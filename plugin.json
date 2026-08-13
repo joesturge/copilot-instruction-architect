@@ -1,6 +1,6 @@
 {
   "name": "instruction-architect",
-  "description": "Remembers what you and your agents learn during development and turns durable knowledge into persistent AI configuration improvements. Provides memory, context gathering, LLM reasoning, persistence and mechanical safety for Copilot configuration.",
+  "description": "Teaches the current Copilot session how to improve repository instructions, skills, prompts, agents and supporting documentation with minimal plugin code.",
   "version": "0.1.0",
   "author": {
     "name": "Joe Sturge",

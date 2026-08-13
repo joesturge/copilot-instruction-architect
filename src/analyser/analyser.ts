@@ -44,7 +44,7 @@ async function findMarkdownFiles(dir: string): Promise<string[]> {
 
 /**
  * Read all existing AI configuration files from the repository.
- * Returns their paths and contents so the LLM can reason about them.
+ * Returns their paths and contents so the current Copilot session can review them.
  */
 export async function readExistingConfig(
   repoRoot: string

@@ -1,5 +1,5 @@
 /**
- * CLI integration evals (deterministic, no LLM required).
+ * CLI integration evals (deterministic, no separate LLM required).
  *
  * Each eval runs a real command against a fixture repository and asserts
  * on behaviour — not just that it ran, but that it produced the correct result.
@@ -38,14 +38,14 @@ describe('eval: seed — empty repository', () => {
   beforeEach(async () => { repoRoot = await setupFixture('empty-repo'); });
   afterEach(async () => { await rm(repoRoot, { recursive: true, force: true }); });
 
-  it('does not create copilot-instructions.md without LLM', async () => {
+  it('does not create copilot-instructions.md during guidance output', async () => {
     const output = await seed(repoRoot);
-    expect(output).toMatch(/llm|api[_-]?key/i);
+    expect(output).toContain('current Copilot session');
     const files = await readExistingConfig(repoRoot);
     expect(files.some((f) => f.path === '.github/copilot-instructions.md')).toBe(false);
   });
 
-  it('is idempotent without LLM', async () => {
+  it('is idempotent', async () => {
     const first = await seed(repoRoot);
     const second = await seed(repoRoot);
     expect(second).toBe(first);
@@ -53,15 +53,15 @@ describe('eval: seed — empty repository', () => {
 });
 
 // ---------------------------------------------------------------------------
-// seed — existing configuration must be preserved without LLM
+// seed — existing configuration must be preserved
 // ---------------------------------------------------------------------------
 
-describe('eval: seed — preserves existing configuration without LLM', () => {
+describe('eval: seed — preserves existing configuration', () => {
   let repoRoot: string;
   beforeEach(async () => { repoRoot = await setupFixture('bloated-repo'); });
   afterEach(async () => { await rm(repoRoot, { recursive: true, force: true }); });
 
-  it('does not modify existing copilot-instructions.md when no LLM is configured', async () => {
+  it('does not modify existing copilot-instructions.md', async () => {
     const before = (await readExistingConfig(repoRoot))
       .find((f) => f.path === '.github/copilot-instructions.md')
       ?.content;
@@ -69,13 +69,13 @@ describe('eval: seed — preserves existing configuration without LLM', () => {
     const after = (await readExistingConfig(repoRoot))
       .find((f) => f.path === '.github/copilot-instructions.md')
       ?.content;
-    // Without LLM, seed must not overwrite existing content.
+    // Guidance-only seed must not overwrite existing content.
     expect(after).toBe(before);
   });
 
-  it('reports that LLM is required to improve existing configuration', async () => {
+  it('reports Copilot-native guidance for improving existing configuration', async () => {
     const output = await seed(repoRoot);
-    expect(output).toMatch(/llm|api[_-]?key/i);
+    expect(output).toContain('current Copilot session');
   });
 });
 
@@ -110,7 +110,7 @@ describe('eval: seed — baseline does not introduce secrets', () => {
   beforeEach(async () => { repoRoot = await setupFixture('empty-repo'); });
   afterEach(async () => { await rm(repoRoot, { recursive: true, force: true }); });
 
-  it('seed without LLM writes no files and therefore introduces no secrets', async () => {
+  it('seed writes no files and therefore introduces no secrets', async () => {
     await seed(repoRoot);
     const files = await readExistingConfig(repoRoot);
     expect(files).toHaveLength(0);

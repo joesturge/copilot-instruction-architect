@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "instruction-architect",
-      "description": "Continuously analyses and improves a repository's AI-development configuration. Determines what knowledge should exist, where it should live, and whether it is worth adding at all.",
+      "description": "Teaches Copilot how to improve a repository's AI-development configuration using the current conversation and repository tools.",
       "version": "0.1.0",
       "source": "."
     }

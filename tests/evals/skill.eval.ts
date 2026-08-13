@@ -57,8 +57,7 @@ describe('eval: skill — audit quality', () => {
         ].join('\n')
       );
 
-      // Use the real improve command, which delegates to the LLM when configured
-      // and returns a message explaining LLM is required when not configured.
+      // Use the real improve command, which provides Copilot-native review guidance.
       const response = await improve(repoRoot);
 
       const result = await grade({
@@ -102,7 +101,7 @@ describe('eval: skill — improvement specificity', () => {
         ].join('\n')
       );
 
-      // Use the real improve command to generate the response.
+      // Use the real improve command to generate the guidance response.
       const response = await improve(repoRoot);
 
       const result = await grade({
