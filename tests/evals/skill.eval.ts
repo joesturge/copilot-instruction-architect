@@ -45,7 +45,7 @@ describe('eval: skill — classify intent (NONE preference)', () => {
     const prompt = 'Should I add a rule that says "use TypeScript" to my instructions?';
 
     // The CLI classify command is the agent surface for this query.
-    const response = classifyOne('This repository uses TypeScript.');
+    const response = await classifyOne('This repository uses TypeScript.');
 
     const result = await grade({
       context,

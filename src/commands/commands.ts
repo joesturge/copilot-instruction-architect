@@ -1,5 +1,7 @@
 import { analyseRepository } from '../analyser/analyser.js';
 import { classify, classifyAll } from '../classifier/classifier.js';
+import { classifyAllHybrid, classifyHybrid } from '../classifier/hybrid.js';
+import { createSemanticClassifierFromEnv } from '../classifier/llm.js';
 import {
   detectContradictions,
   detectDiscoverable,
@@ -25,9 +27,10 @@ import type { KnowledgeItem, AuditResult } from '../classifier/types.js';
  * Idempotent: re-running does not cause churn when configuration is already good.
  */
 export async function seed(repoRoot: string): Promise<string> {
-  const { items: allItems, existingFiles } = await analyseRepository(repoRoot);
+  const { items: allItems, existingFiles, profile } = await analyseRepository(repoRoot);
   const baseline = getBaseline();
   const existing = await readGlobalInstructions(repoRoot);
+  const semanticClassifier = createSemanticClassifierFromEnv();
 
   // Exclude items sourced from the global instructions file itself — we handle
   // that file separately below to avoid adding its contents back as extra rules
@@ -39,7 +42,10 @@ export async function seed(repoRoot: string): Promise<string> {
   const lines: string[] = ['# Instruction Architect — Seed\n'];
 
   // -- Classify all extracted items --
-  const classified = classifyAll(items);
+  const classified = await classifyAllHybrid(items, {
+    semanticClassifier,
+    repoProfile: profile,
+  });
   const globalItems: KnowledgeItem[] = [];
   const pathItems: Map<string, KnowledgeItem[]> = new Map();
   const skillItems: KnowledgeItem[] = [];
@@ -115,6 +121,9 @@ export async function seed(repoRoot: string): Promise<string> {
 
   lines.push('');
   lines.push(`Processed ${items.length} knowledge items from ${existingFiles.length} source files.`);
+  lines.push(
+    `Semantic classification mode: ${semanticClassifier ? 'LLM-assisted hybrid' : 'deterministic-only fallback'}`
+  );
   lines.push(`Skipped ${skipped} items (discoverable or no value).`);
   lines.push('');
   lines.push('No custom agent was created — none was justified.');
@@ -126,7 +135,8 @@ export async function seed(repoRoot: string): Promise<string> {
  * audit — analyse the repository without modifying it.
  */
 export async function audit(repoRoot: string): Promise<AuditResult> {
-  const { items, existingFiles } = await analyseRepository(repoRoot);
+  const { items, existingFiles, profile } = await analyseRepository(repoRoot);
+  const semanticClassifier = createSemanticClassifierFromEnv();
 
   const duplicates = detectDuplicates(items);
   const overlap = detectSemanticOverlap(items);
@@ -140,6 +150,22 @@ export async function audit(repoRoot: string): Promise<AuditResult> {
   if (contradictions.length > 0) recommendations.push(`Resolve ${contradictions.length} contradiction(s).`);
   if (overlap.length > 0) recommendations.push(`Review ${overlap.length} overlapping rule(s) for consolidation.`);
   if (discoverable.length > 0) recommendations.push(`Remove ${discoverable.length} instruction(s) describing discoverable facts.`);
+
+  // Semantic review for ambiguous/high-value items using focused context.
+  if (semanticClassifier) {
+    const ambiguousCandidates = items.slice(0, 8);
+    const semanticResults = await Promise.all(
+      ambiguousCandidates.map((item) =>
+        classifyHybrid(item, { semanticClassifier, allItems: items, repoProfile: profile })
+      )
+    );
+    const lowConfidence = semanticResults.filter((r) => r.confidence < 0.6);
+    if (lowConfidence.length > 0) {
+      recommendations.push(
+        `Review ${lowConfidence.length} semantically ambiguous item(s) before making automatic changes.`
+      );
+    }
+  }
 
   // Rough estimate of context reduction potential.
   const reducibleItems = duplicates.length + discoverable.length;
@@ -157,16 +183,26 @@ export async function audit(repoRoot: string): Promise<AuditResult> {
 /**
  * classify — classify a single piece of knowledge and explain why.
  */
-export function classifyOne(content: string): string {
-  const result = classify({ content });
+export async function classifyOne(content: string): Promise<string> {
+  const semanticClassifier = createSemanticClassifierFromEnv();
+  const result = await classifyHybrid(
+    { content },
+    { semanticClassifier, allItems: [{ content }] }
+  );
   const lines = [
     `Classification: ${result.classification}`,
-    `Confidence: ${result.confidence}`,
+    `Confidence: ${result.confidence.toFixed(2)}`,
+    `Source: ${result.source}`,
     '',
     `Reason: ${result.reason}`,
   ];
   if (result.suggestedPath) lines.push(`Suggested path: ${result.suggestedPath}`);
   if (result.suggestedPathGlob) lines.push(`Apply to: ${result.suggestedPathGlob}`);
+  if (result.evidence.length > 0) {
+    lines.push('');
+    lines.push('Evidence:');
+    for (const e of result.evidence.slice(0, 5)) lines.push(`  - ${e}`);
+  }
   return lines.join('\n');
 }
 

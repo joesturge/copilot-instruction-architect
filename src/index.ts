@@ -58,7 +58,7 @@ async function main(): Promise<void> {
         console.error('Usage: instruction-architect classify "<knowledge text>"');
         process.exit(1);
       }
-      console.log(classifyOne(content));
+      console.log(await classifyOne(content));
       break;
     }
     case 'review': {

@@ -1,6 +1,6 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, extname, relative } from 'node:path';
-import type { KnowledgeItem } from '../classifier/types.js';
+import type { KnowledgeItem, RepositoryProfile } from '../classifier/types.js';
 
 /**
  * Source files that may contain existing AI configuration or useful knowledge.
@@ -50,7 +50,20 @@ export function extractKnowledgeFromMarkdown(
     for (const line of lines) {
       const cleaned = line.replace(/^[-*•]\s+/, '').trim();
       if (cleaned.length > 10) {
-        items.push({ content: cleaned, sourceFile, pathGlob });
+        const id = `${sourceFile}:${items.length}`;
+        items.push({
+          id,
+          content: cleaned,
+          sourceFile,
+          sourceType: inferSourceType(sourceFile),
+          pathGlob,
+          scope: pathGlob ? 'path' : 'unknown',
+          stability: 'medium',
+          discoverability: 'low',
+          behaviouralValue: 'medium',
+          extractionConfidence: 0.9,
+          rationale: 'Extracted from existing repository guidance source.',
+        });
       }
     }
   }
@@ -89,6 +102,7 @@ async function findMarkdownFiles(dir: string): Promise<string[]> {
 export async function analyseRepository(repoRoot: string): Promise<{
   items: KnowledgeItem[];
   existingFiles: string[];
+  profile: RepositoryProfile;
 }> {
   const items: KnowledgeItem[] = [];
   const existingFiles: string[] = [];
@@ -119,7 +133,8 @@ export async function analyseRepository(repoRoot: string): Promise<{
     }
   }
 
-  return { items, existingFiles };
+  const profile = await buildRepositoryProfile(repoRoot, existingFiles);
+  return { items, existingFiles, profile };
 }
 
 /**
@@ -164,4 +179,100 @@ export async function detectSourceOfTruth(
   }
 
   return false;
+}
+
+function inferSourceType(sourceFile: string): KnowledgeItem['sourceType'] {
+  if (sourceFile === '.github/copilot-instructions.md') return 'copilot';
+  if (sourceFile.startsWith('.github/instructions/')) return 'instructions';
+  if (sourceFile.startsWith('.github/skills/')) return 'skill';
+  if (sourceFile.startsWith('.github/prompts/')) return 'prompt';
+  if (sourceFile.startsWith('.github/agents/')) return 'agent';
+  if (sourceFile === 'AGENTS.md' || sourceFile === 'CLAUDE.md' || sourceFile.startsWith('.cursor/rules')) {
+    return 'external';
+  }
+  if (sourceFile.endsWith('.md')) return 'docs';
+  return 'unknown';
+}
+
+async function buildRepositoryProfile(
+  repoRoot: string,
+  existingCopilotFiles: string[]
+): Promise<RepositoryProfile> {
+  const lockfileCandidates = ['pnpm-lock.yaml', 'yarn.lock', 'package-lock.json', 'bun.lockb'];
+  const ciCandidates = ['.github/workflows/ci.yml', '.github/workflows/ci.yaml'];
+  const testConfigCandidates = [
+    'vitest.config.ts',
+    'vitest.config.js',
+    'jest.config.js',
+    'jest.config.ts',
+    'pytest.ini',
+  ];
+
+  const lockfiles: string[] = [];
+  const ciFiles: string[] = [];
+  const testConfigFiles: string[] = [];
+  const sourceOfTruthFiles: string[] = [];
+
+  for (const file of lockfileCandidates) {
+    try {
+      await stat(join(repoRoot, file));
+      lockfiles.push(file);
+      sourceOfTruthFiles.push(file);
+    } catch {
+      // ignored
+    }
+  }
+
+  for (const file of ciCandidates) {
+    try {
+      await stat(join(repoRoot, file));
+      ciFiles.push(file);
+      sourceOfTruthFiles.push(file);
+    } catch {
+      // ignored
+    }
+  }
+
+  for (const file of testConfigCandidates) {
+    try {
+      await stat(join(repoRoot, file));
+      testConfigFiles.push(file);
+      sourceOfTruthFiles.push(file);
+    } catch {
+      // ignored
+    }
+  }
+
+  try {
+    await stat(join(repoRoot, 'package.json'));
+    sourceOfTruthFiles.push('package.json');
+  } catch {
+    // ignored
+  }
+
+  let packageManager: string | undefined;
+  try {
+    const packageJson = JSON.parse(await readFile(join(repoRoot, 'package.json'), 'utf8')) as {
+      packageManager?: string;
+    };
+    packageManager = packageJson.packageManager?.split('@')[0];
+  } catch {
+    // ignored
+  }
+  if (!packageManager) {
+    if (lockfiles.includes('pnpm-lock.yaml')) packageManager = 'pnpm';
+    else if (lockfiles.includes('yarn.lock')) packageManager = 'yarn';
+    else if (lockfiles.includes('bun.lockb')) packageManager = 'bun';
+    else if (lockfiles.includes('package-lock.json')) packageManager = 'npm';
+  }
+
+  return {
+    packageManager,
+    lockfiles,
+    hasCiWorkflow: ciFiles.length > 0,
+    ciFiles,
+    testConfigFiles,
+    copilotFiles: existingCopilotFiles,
+    sourceOfTruthFiles: Array.from(new Set(sourceOfTruthFiles)),
+  };
 }

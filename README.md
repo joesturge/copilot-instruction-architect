@@ -25,6 +25,22 @@ winget install OpenJS.NodeJS
 
 The session hooks (`sessionStart`, `sessionEnd`) are plain shell / PowerShell scripts and work without Node.js.
 
+## Hybrid deterministic + LLM classification
+
+Instruction Architect uses deterministic analysis as a cheap filter and optionally escalates semantic decisions to an LLM classifier.
+
+- Deterministic layer: extraction, duplicate/overlap/contradiction/discoverability detection, source-of-truth checks.
+- LLM layer: semantic classification and ambiguity resolution with structured output validation.
+
+LLM classification is optional and only enabled when environment variables are present:
+
+```sh
+export INSTRUCTION_ARCHITECT_LLM_API_KEY=...
+export INSTRUCTION_ARCHITECT_LLM_MODEL=gpt-4o-mini
+# optional:
+export INSTRUCTION_ARCHITECT_LLM_BASE_URL=https://api.openai.com/v1
+```
+
 ## Commands
 
 ```sh
