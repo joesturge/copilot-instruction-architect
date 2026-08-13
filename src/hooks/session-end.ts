@@ -6,8 +6,7 @@
  */
 import { loadState } from '../state/state.js';
 import { createSemanticClassifierFromEnv } from '../classifier/llm.js';
-import { evaluateKnowledgeItems, groupRepresentationDecisions } from '../knowledge/pipeline.js';
-import type { KnowledgeItem, RepositoryProfile } from '../classifier/types.js';
+import { evaluateConversationKnowledge, groupRepresentationDecisions } from '../knowledge/pipeline.js';
 
 async function main(): Promise<void> {
   const state = await loadState();
@@ -24,30 +23,21 @@ async function main(): Promise<void> {
   if (highConfidence.length === 0) return;
 
   const semanticClassifier = createSemanticClassifierFromEnv();
-  const items: KnowledgeItem[] = highConfidence.map((obs, index) => ({
-    id: `session-observation:${index}`,
-    content: obs.description,
-    sourceType: 'external',
-    scope: 'unknown',
-    stability: obs.type === 'repeated_workflow' ? 'high' : 'medium',
-    behaviouralValue: obs.type === 'security_issue' ? 'high' : 'medium',
-    discoverability: 'low',
-  }));
-  const profile: RepositoryProfile = {
-    lockfiles: [],
-    hasCiWorkflow: false,
-    ciFiles: [],
-    testConfigFiles: [],
-    copilotFiles: [],
-    sourceOfTruthFiles: [],
-  };
-  const evaluated = await evaluateKnowledgeItems(items, profile, {
+  const latest = [...highConfidence].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  )[0];
+  const repoRoot = latest?.repoRoot;
+  if (!repoRoot) return;
+  const repoObservations = highConfidence.filter((o) => o.repoRoot === repoRoot);
+
+  const evaluated = await evaluateConversationKnowledge(repoRoot, repoObservations, {
     semanticClassifier,
   });
+  if (evaluated.decisions.length === 0) return;
   const grouped = groupRepresentationDecisions(evaluated.decisions);
 
   console.log('\nInstruction Architect — Session knowledge proposals:\n');
-  for (const decision of evaluated.decisions) {
+  for (const decision of evaluated.decisions.slice(0, 12)) {
     console.log(`  [${decision.semantic.classification}] ${decision.item.content}`);
   }
   console.log('');

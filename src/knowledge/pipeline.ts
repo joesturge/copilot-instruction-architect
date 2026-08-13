@@ -32,6 +32,21 @@ export interface RepositoryKnowledgeEvaluation {
   decisions: KnowledgeRepresentationDecision[];
 }
 
+export interface ConversationObservation {
+  description: string;
+  confidence: 'high' | 'medium' | 'low';
+  type:
+    | 'correction'
+    | 'repeated_failure'
+    | 'repeated_workflow'
+    | 'missing_guidance'
+    | 'documentation_opportunity'
+    | 'testing_opportunity'
+    | 'security_issue';
+  timestamp: string;
+  repoRoot: string;
+}
+
 export async function evaluateRepositoryKnowledge(
   repoRoot: string,
   options: { semanticClassifier?: SemanticClassifier } = {}
@@ -41,6 +56,23 @@ export async function evaluateRepositoryKnowledge(
   return {
     ...evaluation,
     existingFiles,
+  };
+}
+
+export async function evaluateConversationKnowledge(
+  repoRoot: string,
+  observations: ConversationObservation[],
+  options: { semanticClassifier?: SemanticClassifier } = {}
+): Promise<RepositoryKnowledgeEvaluation> {
+  const { items: repositoryItems, existingFiles, profile } = await analyseRepository(repoRoot);
+  const conversationItems = extractConversationKnowledge(observations);
+  const merged = [...repositoryItems, ...conversationItems];
+  const evaluation = await evaluateKnowledgeItems(merged, profile, options);
+  const conversationSet = new Set(conversationItems);
+  return {
+    ...evaluation,
+    existingFiles,
+    decisions: evaluation.decisions.filter((decision) => conversationSet.has(decision.item)),
   };
 }
 
@@ -147,6 +179,46 @@ export function groupRepresentationDecisions(
 
 function hasSignal(item: KnowledgeItem, findings: AuditFinding[]): boolean {
   return findings.some((finding) => finding.affectedItems.includes(item));
+}
+
+function extractConversationKnowledge(observations: ConversationObservation[]): KnowledgeItem[] {
+  const grouped = new Map<string, { sample: ConversationObservation; count: number }>();
+  for (const observation of observations) {
+    const key = normalise(observation.description);
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.count++;
+    } else {
+      grouped.set(key, { sample: observation, count: 1 });
+    }
+  }
+
+  const items: KnowledgeItem[] = [];
+  let index = 0;
+  for (const { sample, count } of grouped.values()) {
+    if (!isDurableObservation(sample, count)) continue;
+    items.push({
+      id: `conversation:${index++}`,
+      content: sample.description,
+      sourceType: 'external',
+      sourceFile: '[conversation]',
+      scope: 'unknown',
+      stability: count >= 2 || sample.type === 'repeated_workflow' ? 'high' : 'medium',
+      discoverability: 'low',
+      behaviouralValue:
+        sample.type === 'security_issue' || sample.type === 'repeated_failure' ? 'high' : 'medium',
+      extractionConfidence: sample.confidence === 'high' ? 0.9 : sample.confidence === 'medium' ? 0.7 : 0.5,
+      rationale: count >= 2 ? 'Repeated conversation knowledge.' : 'High-confidence conversation observation.',
+    });
+  }
+  return items;
+}
+
+function isDurableObservation(observation: ConversationObservation, count: number): boolean {
+  if (count >= 2) return true;
+  if (observation.type === 'repeated_failure' || observation.type === 'repeated_workflow') return true;
+  if (observation.confidence !== 'high') return false;
+  return observation.type === 'security_issue' || observation.type === 'missing_guidance';
 }
 
 function canonicalKey(item: KnowledgeItem, classification: Classification): string {

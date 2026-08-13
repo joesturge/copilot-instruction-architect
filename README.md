@@ -35,6 +35,8 @@ Instruction Architect manages repository knowledge through one shared pipeline u
 4. Decide representation (global, path, skill, prompt, agent, or omit)
 5. Propose minimal file changes
 
+Knowledge comes from both repository evidence and conversation observations. Session learning only proposes durable observations (for example repeated corrections), checks whether they are already represented, then proposes minimal normal Copilot-file changes.
+
 Deterministic code handles mechanical facts (paths, extraction, frontmatter, metadata, validation). LLM calls are optional and only used for semantic judgement where needed:
 
 ```sh
