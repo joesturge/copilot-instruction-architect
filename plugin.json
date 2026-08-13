@@ -1,0 +1,14 @@
+{
+  "name": "instruction-architect",
+  "description": "Continuously analyses and improves a repository's AI-development configuration. Determines what knowledge should exist, where it should live, and whether it is worth adding at all.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Joe Sturge",
+    "url": "https://github.com/joesturge"
+  },
+  "repository": "https://github.com/joesturge/copilot-instruction-architect",
+  "license": "MIT",
+  "keywords": ["copilot", "instructions", "ai-config", "optimisation"],
+  "skills": ["skills/"],
+  "hooks": "hooks.json"
+}

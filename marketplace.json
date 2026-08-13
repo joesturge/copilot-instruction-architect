@@ -1,0 +1,19 @@
+{
+  "name": "instruction-architect-marketplace",
+  "owner": {
+    "name": "Joe Sturge",
+    "email": "joe@joesturge.com"
+  },
+  "metadata": {
+    "description": "Marketplace for the Instruction Architect GitHub Copilot CLI plugin.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "instruction-architect",
+      "description": "Continuously analyses and improves a repository's AI-development configuration. Determines what knowledge should exist, where it should live, and whether it is worth adding at all.",
+      "version": "0.1.0",
+      "source": "."
+    }
+  ]
+}
