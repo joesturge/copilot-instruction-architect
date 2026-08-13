@@ -62,9 +62,13 @@ describe('eval: seed — preserves existing configuration without LLM', () => {
   afterEach(async () => { await rm(repoRoot, { recursive: true, force: true }); });
 
   it('does not modify existing copilot-instructions.md when no LLM is configured', async () => {
-    const before = await readGlobalInstructions(repoRoot);
+    const before = (await readExistingConfig(repoRoot))
+      .find((f) => f.path === '.github/copilot-instructions.md')
+      ?.content;
     await seed(repoRoot);
-    const after = await readGlobalInstructions(repoRoot);
+    const after = (await readExistingConfig(repoRoot))
+      .find((f) => f.path === '.github/copilot-instructions.md')
+      ?.content;
     // Without LLM, seed must not overwrite existing content.
     expect(after).toBe(before);
   });
@@ -86,9 +90,13 @@ describe('eval: seed — idempotency', () => {
 
   it('produces identical file content on first and second run', async () => {
     await seed(repoRoot);
-    const first = await readGlobalInstructions(repoRoot);
+    const first = (await readExistingConfig(repoRoot))
+      .find((f) => f.path === '.github/copilot-instructions.md')
+      ?.content;
     await seed(repoRoot);
-    const second = await readGlobalInstructions(repoRoot);
+    const second = (await readExistingConfig(repoRoot))
+      .find((f) => f.path === '.github/copilot-instructions.md')
+      ?.content;
     expect(first).toBe(second);
   });
 });
