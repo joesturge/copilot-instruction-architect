@@ -11,7 +11,7 @@
     "test": "vitest run",
     "lint": "tsc --noEmit",
     "build": "tsc --outDir dist",
-    "postinstall": "chmod +x hooks/session-start.sh hooks/session-end.sh 2>/dev/null || true"
+    "postinstall": "chmod +x hooks/session-start.sh 2>/dev/null || true"
   },
   "repository": {
     "type": "git",

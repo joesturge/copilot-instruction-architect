@@ -23,14 +23,6 @@ Review existing configuration and propose the smallest useful improvement using 
 
 List all existing AI configuration files in this repository.
 
-### /instruction-architect configure [key] [value]
-
-Manage personal preferences:
-
-- `language` — documentation language (e.g. `en-GB`, `en-US`)
-- `style` — writing style (`natural`, `formal`)
-- `autonomy` — `suggest` (default), `review`, `automatic`, `disabled`
-
 ### /instruction-architect baseline
 
 Inspect the current baseline version and content.
@@ -56,7 +48,4 @@ When reasoning about what to persist in the current Copilot session:
 - **Prefer the smallest useful change.** Add, update, or reorganise only what is necessary.
 - **Ignore transient observations.** One-off debugging steps, task-specific details, temporary workarounds, and incidental implementation decisions do not belong in persistent configuration.
 - **Let Copilot decide.** Do not rely on plugin-side heuristics or classifiers to make semantic persistence decisions.
-
-## Session learning
-
-At session end, the plugin may surface recent observations as a reminder. The active Copilot session decides whether any of them are durable enough to persist. Raw observations are never turned directly into persistent instructions automatically.
+- **Act during development.** Instruction Architect is relevant whenever useful durable knowledge surfaces — not only when explicitly invoked. Recognise opportunities during normal development conversations.

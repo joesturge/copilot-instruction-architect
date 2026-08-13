@@ -8,15 +8,13 @@
  *   seed       Show Copilot-native seeding guidance
  *   improve    Show Copilot-native improvement guidance
  *   review     List existing AI configuration files
- *   configure  Manage personal preferences
  *   baseline   Inspect baseline information
  */
 import { cwd } from 'node:process';
 import { seed, improve, review } from './commands/commands.js';
 import { getBaseline } from './baseline/baseline.js';
-import { loadState, saveState } from './state/state.js';
 
-const [, , command, ...args] = process.argv;
+const [, , command] = process.argv;
 const repoRoot = cwd();
 
 async function main(): Promise<void> {
@@ -36,22 +34,6 @@ async function main(): Promise<void> {
       console.log(output);
       break;
     }
-    case 'configure': {
-      const state = await loadState();
-      const [key, value] = args;
-      if (!key) {
-        console.log('Current preferences:');
-        console.log(JSON.stringify(state.preferences, null, 2));
-      } else if (key === 'language' || key === 'style' || key === 'autonomy') {
-        (state.preferences as Record<string, string>)[key] = value;
-        await saveState(state);
-        console.log(`Set ${key} = ${value}`);
-      } else {
-        console.error(`Unknown preference: ${key}`);
-        process.exit(1);
-      }
-      break;
-    }
     case 'baseline': {
       const b = getBaseline();
       console.log(`Baseline version: ${b.version}\n`);
@@ -60,7 +42,7 @@ async function main(): Promise<void> {
     }
     default: {
       console.error(`Unknown command: ${command ?? '(none)'}`);
-      console.error('Available commands: seed, improve, review, configure, baseline');
+      console.error('Available commands: seed, improve, review, baseline');
       process.exit(1);
     }
   }

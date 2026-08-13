@@ -6,6 +6,8 @@ A GitHub Copilot plugin that teaches Copilot how to improve a repository's own i
 
 Development sessions generate useful knowledge: corrections from the AI, repeated workflows, missing guidance that caused problems. Instruction Architect helps the current Copilot session inspect that knowledge, inspect existing repository guidance, and decide what is worth persisting and where it belongs.
 
+The `sessionStart` hook injects a small awareness context so Copilot recognises when to use the skill during normal development — not only when explicitly asked.
+
 Repositories with well-maintained AI configuration benefit all future contributors — including those who don't use the plugin themselves.
 
 ## Installation
@@ -29,20 +31,29 @@ brew install node
 winget install OpenJS.NodeJS
 ```
 
-Session hooks (`sessionStart`, `sessionEnd`) are plain shell/PowerShell scripts and do not need Node.js.
+The `sessionStart` hook is a plain shell/PowerShell script and does not need Node.js.
 
 ## Architecture
 
-Instruction Architect does **not** call a separate LLM API.
+Instruction Architect does **not** call a separate LLM API. There is no second context window, no observation database, and no session-end processing.
 
-It is a GitHub Copilot plugin, so the intended reasoning flow is:
+The intended reasoning flow is:
 
-1. Copilot loads the plugin's skill and hooks
-2. Copilot inspects the current repository and conversation
-3. Copilot decides whether anything should persist
-4. Copilot makes or proposes the smallest useful repository change
+```
+sessionStart hook injects small static awareness context
+    ↓
+normal Copilot session
+    ↓
+Copilot decides when Instruction Architect is relevant
+    ↓
+instruction-architect skill
+    ↓
+Copilot reasons using its own context and repository tools
+    ↓
+small persistent improvement
+```
 
-The plugin code stays thin. It provides baseline guidance, lightweight state, lifecycle hooks, and small helper commands. The semantic reasoning happens inside the active Copilot session.
+The plugin stays thin. It provides baseline guidance, lifecycle hooks, and small helper commands. Semantic reasoning happens inside the active Copilot session.
 
 ## Commands
 
@@ -50,7 +61,6 @@ The plugin code stays thin. It provides baseline guidance, lightweight state, li
 instruction-architect seed       # show Copilot-native seeding guidance
 instruction-architect improve    # show Copilot-native improvement guidance
 instruction-architect review     # list existing AI configuration files
-instruction-architect configure  # manage personal preferences
 instruction-architect baseline   # inspect baseline version and content
 ```
 
@@ -59,7 +69,7 @@ instruction-architect baseline   # inspect baseline version and content
 `seed` prepares the current Copilot session to bootstrap or restructure AI configuration:
 
 - It shows existing repository AI configuration (if any)
-- It shows the baseline version and preferences
+- It shows the baseline version
 - It reminds Copilot to use the current conversation and repository tools
 - It focuses Copilot on making the smallest useful change
 
@@ -72,18 +82,6 @@ This keeps the baseline as reference guidance rather than copying it wholesale i
 If your repository already has `.github/copilot-instructions.md` or other Copilot customisation, `seed` treats it as a migration/augmentation opportunity, not something to replace.
 
 The current Copilot session should review the existing content alongside the baseline and decide what to keep, what to add, and what to reorganise. Repository-specific knowledge should never be silently discarded.
-
-## Session learning
-
-At the end of each session, the session hook can:
-
-1. Load recent observations captured by the plugin
-2. Show them back to the active Copilot session as a reminder
-3. Prompt Copilot to decide whether any of them belong in persistent repository guidance
-
-Copilot is the filter. It should ignore transient details, one-off debugging steps, already-discoverable facts, and information that belongs only to the current task. Only durable knowledge that would genuinely improve future development should be persisted.
-
-**Raw observations are never written directly to Copilot instructions.** The hook does not perform autonomous reasoning or automatic repository edits.
 
 ## How improve works
 
@@ -111,48 +109,6 @@ Instruction Architect is primarily guidance, but when used to make changes it sh
 - `.github/prompts/*.prompt.md` — explicitly user-invoked operations
 - `.github/agents/` — agent configuration (rare)
 
-## Autonomy modes
-
-Configure how the session hook behaves:
-
-```sh
-instruction-architect configure autonomy suggest    # default: show session reminders
-instruction-architect configure autonomy review     # same as suggest
-instruction-architect configure autonomy automatic  # legacy alias; still keeps reasoning in-session
-instruction-architect configure autonomy disabled   # session hook does nothing
-```
-
-In all modes, semantic reasoning remains in the active Copilot session. `disabled` suppresses hook reminders entirely.
-
-## Personal preferences
-
-```sh
-instruction-architect configure language en-GB   # documentation language
-instruction-architect configure style formal     # writing style
-```
-
-Preferences are included in the plugin's guidance output where relevant.
-
-View current preferences:
-
-```sh
-instruction-architect configure
-```
-
-## Reviewing changes
-
-Use the skill and commands to review what exists, then decide in the active Copilot session whether to make changes:
-
-```sh
-# see what exists
-instruction-architect review
-
-# show improvement guidance for the current session
-instruction-architect improve
-```
-
-Changes can also be reviewed in your normal git workflow: `git diff`, `git status`.
-
 ## What the plugin does not do
 
 - No separate LLM API key
@@ -160,7 +116,7 @@ Changes can also be reviewed in your normal git workflow: `git diff`, `git statu
 - No direct `chat/completions` calls
 - No second reasoning context window
 - No autonomous semantic classification in TypeScript
-- No automatic persistence of raw observations
+- No observation database or session-end processing
 
 ## WSL
 
@@ -172,3 +128,4 @@ The plugin handles the [CLAUDE_PLUGIN_ROOT backslash bug](https://github.com/obr
 npm install
 npm test        # run all tests
 ```
+
