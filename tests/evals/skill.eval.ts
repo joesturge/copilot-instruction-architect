@@ -17,7 +17,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { grade } from './grader.js';
 import { getBaseline } from '../../src/baseline/baseline.js';
-import { readExistingConfig } from '../../src/analyser/analyser.js';
+import { improve } from '../../src/commands/commands.js';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -57,13 +57,9 @@ describe('eval: skill — audit quality', () => {
         ].join('\n')
       );
 
-      const existingFiles = await readExistingConfig(repoRoot);
-      const response = [
-        `Existing AI config files: ${existingFiles.length}`,
-        ...existingFiles.map((f) => `- ${f.path}`),
-        '',
-        'Note: LLM reasoning is required to identify contradictions, duplicates, and discoverable facts.',
-      ].join('\n');
+      // Use the real improve command, which delegates to the LLM when configured
+      // and returns a message explaining LLM is required when not configured.
+      const response = await improve(repoRoot);
 
       const result = await grade({
         context,
@@ -106,11 +102,8 @@ describe('eval: skill — improvement specificity', () => {
         ].join('\n')
       );
 
-      // Simulate an "improve" response via existing file listing.
-      const existingFiles = await readExistingConfig(repoRoot);
-      const response = existingFiles.length > 0
-        ? `Found ${existingFiles.length} config file(s). LLM reasoning required to identify specific improvements.`
-        : 'No improvements needed. Configuration looks good.';
+      // Use the real improve command to generate the response.
+      const response = await improve(repoRoot);
 
       const result = await grade({
         context,
