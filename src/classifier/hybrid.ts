@@ -44,6 +44,7 @@ const VALID_CLASSIFICATIONS: Classification[] = [
   'AGENT',
   'DOCUMENTATION_ONLY',
 ];
+const MIN_LLM_CONFIDENCE = 0.55;
 
 export async function classifyHybrid(
   item: KnowledgeItem,
@@ -67,7 +68,7 @@ export async function classifyHybrid(
     .classify({ candidate: item, evidence, relatedItems })
     .catch(() => null);
   const validated = validateSemanticResult(raw);
-  if (!validated || validated.confidence < 0.55) {
+  if (!validated || validated.confidence < MIN_LLM_CONFIDENCE) {
     const fallback = fromDeterministic(item, evidence);
     fallback.source = 'fallback';
     fallback.reason = validated
@@ -100,6 +101,8 @@ export async function classifyAllHybrid(
 
   async function worker(): Promise<void> {
     while (true) {
+      // Safe in the JS event loop: index read/increment is synchronous and
+      // happens before any await point.
       const current = index;
       index++;
       if (current >= items.length) return;

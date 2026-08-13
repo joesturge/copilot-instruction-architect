@@ -19,6 +19,9 @@ import {
 } from '../io/writer.js';
 import type { KnowledgeItem, AuditResult } from '../classifier/types.js';
 
+const MAX_SEMANTIC_AUDIT_CANDIDATES = 8;
+const LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.6;
+
 /**
  * seed — analyse, bootstrap, migrate and normalise.
  *
@@ -155,13 +158,16 @@ export async function audit(repoRoot: string): Promise<AuditResult> {
   if (semanticClassifier) {
     const ambiguousCandidates = items
       .filter((item) => classify(item).confidence !== 'high')
-      .slice(0, 8);
+      // Bound LLM usage/cost during audit while still sampling ambiguous items.
+      .slice(0, MAX_SEMANTIC_AUDIT_CANDIDATES);
     const semanticResults = await Promise.all(
       ambiguousCandidates.map((item) =>
         classifyHybrid(item, { semanticClassifier, allItems: items, repoProfile: profile })
       )
     );
-    const lowConfidence = semanticResults.filter((r) => r.confidence < 0.6);
+    const lowConfidence = semanticResults.filter(
+      (r) => r.confidence < LOW_CONFIDENCE_REVIEW_THRESHOLD
+    );
     if (lowConfidence.length > 0) {
       recommendations.push(
         `Review ${lowConfidence.length} semantically ambiguous item(s) before making automatic changes.`
