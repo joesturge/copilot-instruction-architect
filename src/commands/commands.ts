@@ -1,13 +1,5 @@
-import { analyseRepository } from '../analyser/analyser.js';
-import { classify, classifyAll } from '../classifier/classifier.js';
-import { classifyAllHybrid, classifyHybrid } from '../classifier/hybrid.js';
+import { classifyHybrid } from '../classifier/hybrid.js';
 import { createSemanticClassifierFromEnv } from '../classifier/llm.js';
-import {
-  detectContradictions,
-  detectDiscoverable,
-  detectDuplicates,
-  detectSemanticOverlap,
-} from '../classifier/detector.js';
 import { getBaseline } from '../baseline/baseline.js';
 import {
   writeGlobalInstructions,
@@ -18,6 +10,10 @@ import {
   formatInstructions,
 } from '../io/writer.js';
 import type { KnowledgeItem, AuditResult } from '../classifier/types.js';
+import {
+  evaluateRepositoryKnowledge,
+  groupRepresentationDecisions,
+} from '../knowledge/pipeline.js';
 
 const MAX_SEMANTIC_AUDIT_CANDIDATES = 8;
 const LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.6;
@@ -30,54 +26,31 @@ const LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.6;
  * Idempotent: re-running does not cause churn when configuration is already good.
  */
 export async function seed(repoRoot: string): Promise<string> {
-  const { items: allItems, existingFiles, profile } = await analyseRepository(repoRoot);
+  const semanticClassifier = createSemanticClassifierFromEnv();
   const baseline = getBaseline();
   const existing = await readGlobalInstructions(repoRoot);
-  const semanticClassifier = createSemanticClassifierFromEnv();
+  const { existingFiles, decisions } = await evaluateRepositoryKnowledge(repoRoot, {
+    semanticClassifier,
+  });
 
   // Exclude items sourced from the global instructions file itself — we handle
   // that file separately below to avoid adding its contents back as extra rules
   // on re-runs (idempotency).
-  const items = allItems.filter(
-    (item) => item.sourceFile !== '.github/copilot-instructions.md'
+  const filteredDecisions = decisions.filter(
+    (decision) => decision.item.sourceFile !== '.github/copilot-instructions.md'
   );
+  const grouped = groupRepresentationDecisions(filteredDecisions);
+  const items = filteredDecisions.map((decision) => decision.item);
 
   const lines: string[] = ['# Instruction Architect — Seed\n'];
-
-  // -- Classify all extracted items --
-  const classified = await classifyAllHybrid(items, {
-    semanticClassifier,
-    repoProfile: profile,
-  });
-  const globalItems: KnowledgeItem[] = [];
+  const globalItems = grouped.global.map((d) => d.item);
   const pathItems: Map<string, KnowledgeItem[]> = new Map();
-  const skillItems: KnowledgeItem[] = [];
-  const promptItems: KnowledgeItem[] = [];
-  let skipped = 0;
-
-  for (let i = 0; i < items.length; i++) {
-    const result = classified[i];
-    switch (result.classification) {
-      case 'GLOBAL_INSTRUCTION':
-        globalItems.push(items[i]);
-        break;
-      case 'PATH_INSTRUCTION': {
-        const glob = result.suggestedPathGlob ?? '*';
-        const existing = pathItems.get(glob) ?? [];
-        existing.push(items[i]);
-        pathItems.set(glob, existing);
-        break;
-      }
-      case 'SKILL':
-        skillItems.push(items[i]);
-        break;
-      case 'PROMPT':
-        promptItems.push(items[i]);
-        break;
-      default:
-        skipped++;
-    }
+  for (const [glob, bucket] of grouped.path) {
+    pathItems.set(glob, bucket.map((d) => d.item));
   }
+  const skillItems = grouped.skills.map((d) => d.item);
+  const promptItems = grouped.prompts.map((d) => d.item);
+  const skipped = grouped.dropped.length;
 
   // -- Build global instructions --
   // Detect whether the baseline is already present to maintain idempotency.
@@ -138,15 +111,13 @@ export async function seed(repoRoot: string): Promise<string> {
  * audit — analyse the repository without modifying it.
  */
 export async function audit(repoRoot: string): Promise<AuditResult> {
-  const { items, existingFiles, profile } = await analyseRepository(repoRoot);
   const semanticClassifier = createSemanticClassifierFromEnv();
-
-  const duplicates = detectDuplicates(items);
-  const overlap = detectSemanticOverlap(items);
-  const contradictions = detectContradictions(items);
-  const discoverable = detectDiscoverable(items);
-
-  const allFindings = [...duplicates, ...overlap, ...contradictions, ...discoverable];
+  const { items, existingFiles, findings: allFindings, decisions } =
+    await evaluateRepositoryKnowledge(repoRoot, { semanticClassifier });
+  const duplicates = allFindings.filter((f) => f.type === 'duplicate');
+  const overlap = allFindings.filter((f) => f.type === 'overly_broad');
+  const contradictions = allFindings.filter((f) => f.type === 'contradiction');
+  const discoverable = allFindings.filter((f) => f.type === 'discoverable');
 
   const recommendations: string[] = [];
   if (duplicates.length > 0) recommendations.push(`Consolidate ${duplicates.length} duplicate rule(s).`);
@@ -154,25 +125,14 @@ export async function audit(repoRoot: string): Promise<AuditResult> {
   if (overlap.length > 0) recommendations.push(`Review ${overlap.length} overlapping rule(s) for consolidation.`);
   if (discoverable.length > 0) recommendations.push(`Remove ${discoverable.length} instruction(s) describing discoverable facts.`);
 
-  // Semantic review for ambiguous/high-value items using focused context.
-  if (semanticClassifier) {
-    const ambiguousCandidates = items
-      .filter((item) => classify(item).confidence !== 'high')
-      // Bound LLM usage/cost during audit while still sampling ambiguous items.
-      .slice(0, MAX_SEMANTIC_AUDIT_CANDIDATES);
-    const semanticResults = await Promise.all(
-      ambiguousCandidates.map((item) =>
-        classifyHybrid(item, { semanticClassifier, allItems: items, repoProfile: profile })
-      )
+  const lowConfidence = decisions
+    .filter((decision) => decision.semantic.source !== 'deterministic')
+    .filter((decision) => decision.semantic.confidence < LOW_CONFIDENCE_REVIEW_THRESHOLD)
+    .slice(0, MAX_SEMANTIC_AUDIT_CANDIDATES);
+  if (lowConfidence.length > 0) {
+    recommendations.push(
+      `Review ${lowConfidence.length} semantically ambiguous item(s) before making automatic changes.`
     );
-    const lowConfidence = semanticResults.filter(
-      (r) => r.confidence < LOW_CONFIDENCE_REVIEW_THRESHOLD
-    );
-    if (lowConfidence.length > 0) {
-      recommendations.push(
-        `Review ${lowConfidence.length} semantically ambiguous item(s) before making automatic changes.`
-      );
-    }
   }
 
   // Rough estimate of context reduction potential.

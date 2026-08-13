@@ -1,6 +1,6 @@
 # copilot-instruction-architect
 
-Self-improving GitHub Copilot configuration architect. Organises, deduplicates and optimises instructions, skills, prompts and agents while capturing useful repository knowledge with minimal context.
+Repository AI-knowledge architect. Discovers repository knowledge, semantically evaluates what is useful, deduplicates/conflict-checks it, and proposes the smallest useful AI configuration changes.
 
 ## Installation
 
@@ -25,14 +25,17 @@ winget install OpenJS.NodeJS
 
 The session hooks (`sessionStart`, `sessionEnd`) are plain shell / PowerShell scripts and work without Node.js.
 
-## Hybrid deterministic + LLM classification
+## Knowledge pipeline (deterministic + LLM)
 
-Instruction Architect uses deterministic analysis as a cheap filter and optionally escalates semantic decisions to an LLM classifier.
+Instruction Architect manages repository knowledge through one shared pipeline used by `seed`, `audit`, `improve`, and session hooks:
 
-- Deterministic layer: extraction, duplicate/overlap/contradiction/discoverability detection, source-of-truth checks.
-- LLM layer: semantic classification and ambiguity resolution with structured output validation.
+1. Discover knowledge from repository AI guidance sources
+2. Semantically evaluate usefulness and representation options
+3. Synthesize via deduplication / discoverability / conflict checks
+4. Decide representation (global, path, skill, prompt, agent, or omit)
+5. Propose minimal file changes
 
-LLM classification is optional and only enabled when environment variables are present:
+Deterministic code handles mechanical facts (paths, extraction, frontmatter, metadata, validation). LLM calls are optional and only used for semantic judgement where needed:
 
 ```sh
 export INSTRUCTION_ARCHITECT_LLM_API_KEY=...
@@ -45,10 +48,10 @@ export INSTRUCTION_ARCHITECT_LLM_BASE_URL=https://api.openai.com/v1
 
 ```sh
 instruction-architect seed       # bootstrap / migrate / normalise
-instruction-architect audit      # analyse without modifying
+instruction-architect audit      # evaluate repository knowledge without modifying
 instruction-architect improve    # find and propose improvements
 instruction-architect classify "Always update tests when changing behaviour."
-instruction-architect review     # full configuration review
+instruction-architect review     # full repository AI-knowledge review
 instruction-architect configure  # manage personal preferences
 instruction-architect baseline   # inspect baseline version
 ```
