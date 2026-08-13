@@ -6,14 +6,13 @@
  *
  * Commands:
  *   seed       Bootstrap/migrate/normalise AI configuration
- *   audit      Analyse without modifying
- *   improve    Find and propose improvements
- *   review     Full review of AI configuration
+ *   improve    Propose improvements to existing configuration
+ *   review     List existing AI configuration files
  *   configure  Manage personal preferences
  *   baseline   Inspect baseline information
  */
 import { cwd } from 'node:process';
-import { seed, audit, improve, review } from './commands/commands.js';
+import { seed, improve, review } from './commands/commands.js';
 import { getBaseline } from './baseline/baseline.js';
 import { loadState, saveState } from './state/state.js';
 
@@ -25,25 +24,6 @@ async function main(): Promise<void> {
     case 'seed': {
       const output = await seed(repoRoot);
       console.log(output);
-      break;
-    }
-    case 'audit': {
-      const result = await audit(repoRoot);
-      console.log('# Instruction Architect Audit\n');
-      console.log(`Existing files: ${result.existingFiles.length}`);
-      for (const f of result.existingFiles) console.log(`  ${f}`);
-      console.log('');
-      console.log(`Findings: ${result.findings.length}`);
-      for (const f of result.findings) {
-        console.log(`  [${f.type}] ${f.description}`);
-        console.log(`    → ${f.recommendation}`);
-      }
-      console.log('');
-      console.log('Recommendations:');
-      for (const r of result.recommendations) console.log(`  - ${r}`);
-      if (result.estimatedContextReduction !== undefined) {
-        console.log(`\nEstimated context reduction: ~${result.estimatedContextReduction}%`);
-      }
       break;
     }
     case 'improve': {
@@ -80,7 +60,7 @@ async function main(): Promise<void> {
     }
     default: {
       console.error(`Unknown command: ${command ?? '(none)'}`);
-      console.error('Available commands: seed, audit, improve, review, configure, baseline');
+      console.error('Available commands: seed, improve, review, configure, baseline');
       process.exit(1);
     }
   }

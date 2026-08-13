@@ -17,7 +17,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { grade } from './grader.js';
 import { getBaseline } from '../../src/baseline/baseline.js';
-import { audit } from '../../src/commands/commands.js';
+import { readExistingConfig } from '../../src/analyser/analyser.js';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -57,12 +57,12 @@ describe('eval: skill — audit quality', () => {
         ].join('\n')
       );
 
-      const auditResult = await audit(repoRoot);
+      const existingFiles = await readExistingConfig(repoRoot);
       const response = [
-        `Findings: ${auditResult.findings.length}`,
-        ...auditResult.findings.map((f) => `- [${f.type}] ${f.description} → ${f.recommendation}`),
+        `Existing AI config files: ${existingFiles.length}`,
+        ...existingFiles.map((f) => `- ${f.path}`),
         '',
-        `Recommendations: ${auditResult.recommendations.join('; ')}`,
+        'Note: LLM reasoning is required to identify contradictions, duplicates, and discoverable facts.',
       ].join('\n');
 
       const result = await grade({
@@ -106,12 +106,10 @@ describe('eval: skill — improvement specificity', () => {
         ].join('\n')
       );
 
-      // Simulate an "improve" response via audit findings.
-      const auditResult = await audit(repoRoot);
-      const response = auditResult.findings.length > 0
-        ? auditResult.findings
-            .map((f, i) => `${i + 1}. **${f.type}**: ${f.description}\n   → ${f.recommendation}`)
-            .join('\n\n')
+      // Simulate an "improve" response via existing file listing.
+      const existingFiles = await readExistingConfig(repoRoot);
+      const response = existingFiles.length > 0
+        ? `Found ${existingFiles.length} config file(s). LLM reasoning required to identify specific improvements.`
         : 'No improvements needed. Configuration looks good.';
 
       const result = await grade({

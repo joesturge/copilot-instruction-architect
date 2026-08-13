@@ -32,7 +32,6 @@ describe('knowledge pipeline', () => {
       };
       await proposeRepositoryChanges(repoRoot, { llm: mockLLM });
       expect(capturedContext).toBeDefined();
-      expect(capturedContext?.profile).toBeDefined();
       expect(Array.isArray(capturedContext?.existingFiles)).toBe(true);
     } finally {
       await rm(repoRoot, { recursive: true });

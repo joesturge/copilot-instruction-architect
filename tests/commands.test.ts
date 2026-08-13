@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { seed, audit } from '../src/commands/commands.js';
+import { seed } from '../src/commands/commands.js';
 import { readGlobalInstructions } from '../src/io/writer.js';
 
 async function createTempRepo(): Promise<string> {
@@ -62,19 +62,6 @@ describe('seed', () => {
       await seed(repoRoot);
       const content = await readGlobalInstructions(repoRoot);
       expect(content).toBeDefined();
-    } finally {
-      await rm(repoRoot, { recursive: true });
-    }
-  });
-});
-
-describe('audit', () => {
-  it('returns empty findings for a clean repository', async () => {
-    const repoRoot = await createTempRepo();
-    try {
-      const result = await audit(repoRoot);
-      expect(result.findings).toHaveLength(0);
-      expect(result.existingFiles).toHaveLength(0);
     } finally {
       await rm(repoRoot, { recursive: true });
     }

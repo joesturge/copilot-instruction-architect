@@ -1,45 +1,60 @@
 import { describe, it, expect } from 'vitest';
-import { extractKnowledgeFromMarkdown } from '../src/analyser/analyser.js';
+import { readExistingConfig } from '../src/analyser/analyser.js';
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
-describe('extractKnowledgeFromMarkdown', () => {
-  it('extracts lines from markdown', () => {
-    const content = `
-## Testing
-
-- Always update tests when changing behaviour.
-- Do not leave stale tests.
-
-## Security
-
-- Fix security issues discovered during development.
-`;
-    const items = extractKnowledgeFromMarkdown(content, 'test.md');
-    expect(items.length).toBeGreaterThan(0);
-    expect(items.some((i) => i.content.includes('update tests'))).toBe(true);
-    expect(items.every((i) => i.sourceFile === 'test.md')).toBe(true);
+describe('readExistingConfig', () => {
+  it('returns empty array for a repository with no AI config files', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-analyser-'));
+    try {
+      const files = await readExistingConfig(repoRoot);
+      expect(files).toHaveLength(0);
+    } finally {
+      await rm(repoRoot, { recursive: true });
+    }
   });
 
-  it('extracts applyTo glob from front-matter', () => {
-    const content = `---
-applyTo: '**/*.test.ts'
----
-
-## Testing
-
-- Always update tests.
-`;
-    const items = extractKnowledgeFromMarkdown(content, 'testing.instructions.md');
-    expect(items.every((i) => i.pathGlob === '**/*.test.ts')).toBe(true);
+  it('reads copilot-instructions.md when present', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-analyser-'));
+    try {
+      await mkdir(join(repoRoot, '.github'), { recursive: true });
+      await writeFile(
+        join(repoRoot, '.github', 'copilot-instructions.md'),
+        '## Testing\n\n- Always update tests.\n'
+      );
+      const files = await readExistingConfig(repoRoot);
+      expect(files).toHaveLength(1);
+      expect(files[0].path).toBe('.github/copilot-instructions.md');
+      expect(files[0].content).toContain('Always update tests');
+    } finally {
+      await rm(repoRoot, { recursive: true });
+    }
   });
 
-  it('returns empty array for blank content', () => {
-    const items = extractKnowledgeFromMarkdown('', 'empty.md');
-    expect(items).toHaveLength(0);
+  it('reads AGENTS.md when present', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-analyser-'));
+    try {
+      await writeFile(join(repoRoot, 'AGENTS.md'), '## Guidance\n\n- Use pnpm.\n');
+      const files = await readExistingConfig(repoRoot);
+      expect(files.some((f) => f.path === 'AGENTS.md')).toBe(true);
+    } finally {
+      await rm(repoRoot, { recursive: true });
+    }
   });
 
-  it('filters out very short lines', () => {
-    const content = `## Section\n\n- Hi\n- This is a real instruction that should be extracted.`;
-    const items = extractKnowledgeFromMarkdown(content, 'test.md');
-    expect(items.every((i) => i.content.length > 10)).toBe(true);
+  it('reads files from .github/instructions directory', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-analyser-'));
+    try {
+      await mkdir(join(repoRoot, '.github', 'instructions'), { recursive: true });
+      await writeFile(
+        join(repoRoot, '.github', 'instructions', 'testing.instructions.md'),
+        "---\napplyTo: '**/*.test.ts'\n---\n\n- Always update tests.\n"
+      );
+      const files = await readExistingConfig(repoRoot);
+      expect(files.some((f) => f.path.includes('testing.instructions.md'))).toBe(true);
+    } finally {
+      await rm(repoRoot, { recursive: true });
+    }
   });
 });

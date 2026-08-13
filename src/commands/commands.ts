@@ -6,9 +6,9 @@ import {
   writeGlobalInstructions,
   readGlobalInstructions,
 } from '../io/writer.js';
-import type { AuditResult, FileProposal } from '../classifier/types.js';
+import type { FileProposal } from '../classifier/types.js';
 import { proposeRepositoryChanges } from '../knowledge/pipeline.js';
-import { analyseRepository } from '../analyser/analyser.js';
+import { readExistingConfig } from '../analyser/analyser.js';
 
 /**
  * seed — bootstrap, migrate, and normalise AI configuration.
@@ -49,54 +49,45 @@ export async function seed(repoRoot: string): Promise<string> {
 }
 
 /**
- * audit — analyse the repository without modifying it.
- */
-export async function audit(repoRoot: string): Promise<AuditResult> {
-  const { existingFiles } = await analyseRepository(repoRoot);
-  return {
-    existingFiles,
-    findings: [],
-    recommendations: [],
-  };
-}
-
-/**
- * improve — find and propose improvements to existing configuration.
+ * improve — propose LLM-driven improvements to existing configuration.
  */
 export async function improve(repoRoot: string): Promise<string> {
-  const result = await audit(repoRoot);
+  const llm = createLLMReasonerFromEnv();
   const lines: string[] = ['# Instruction Architect — Improvement Proposals\n'];
 
-  if (result.findings.length === 0) {
-    lines.push('No improvements found. Set INSTRUCTION_ARCHITECT_LLM_API_KEY to enable LLM-powered analysis.');
+  if (!llm) {
+    lines.push('Set INSTRUCTION_ARCHITECT_LLM_API_KEY to enable LLM-powered analysis.');
     return lines.join('\n');
   }
 
-  for (let i = 0; i < result.findings.length; i++) {
-    const f = result.findings[i];
-    lines.push(`${i + 1}. **${f.type}**: ${f.description}`);
-    lines.push(`   Recommendation: ${f.recommendation}`);
+  const { proposals, summary } = await proposeRepositoryChanges(repoRoot, { llm });
+
+  if (proposals.length === 0) {
+    lines.push(summary || 'No improvements found.');
+    return lines.join('\n');
+  }
+
+  for (const proposal of proposals) {
+    lines.push(`- **${proposal.action}** \`${proposal.path}\`: ${proposal.reason}`);
+  }
+
+  if (summary) {
     lines.push('');
+    lines.push(summary);
   }
 
   return lines.join('\n');
 }
 
 /**
- * review — full review of repository AI configuration.
+ * review — list existing AI configuration files.
  */
 export async function review(repoRoot: string): Promise<string> {
-  const result = await audit(repoRoot);
+  const existingFiles = await readExistingConfig(repoRoot);
   const lines: string[] = ['# Instruction Architect — Configuration Review\n'];
 
-  lines.push(`## Existing files (${result.existingFiles.length})`);
-  for (const f of result.existingFiles) lines.push(`- ${f}`);
-  lines.push('');
-
-  lines.push(`## Findings (${result.findings.length})`);
-  if (result.findings.length === 0) {
-    lines.push('Set INSTRUCTION_ARCHITECT_LLM_API_KEY to enable LLM-powered analysis.');
-  }
+  lines.push(`## Existing files (${existingFiles.length})`);
+  for (const f of existingFiles) lines.push(`- ${f.path}`);
   lines.push('');
 
   return lines.join('\n');
@@ -120,4 +111,3 @@ export async function applyProposal(repoRoot: string, proposal: FileProposal): P
     await writeFile(path, content, 'utf8');
   }
 }
-

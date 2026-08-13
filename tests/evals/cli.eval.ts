@@ -18,7 +18,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { cp, mkdtemp, rm, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { seed, audit } from '../../src/commands/commands.js';
+import { seed } from '../../src/commands/commands.js';
+import { readExistingConfig } from '../../src/analyser/analyser.js';
 import { readGlobalInstructions } from '../../src/io/writer.js';
 
 const FIXTURES = resolve(new URL('../fixtures', import.meta.url).pathname);
@@ -107,18 +108,17 @@ describe('eval: seed — idempotency', () => {
 });
 
 // ---------------------------------------------------------------------------
-// audit evals
+// review evals
 // ---------------------------------------------------------------------------
 
-describe('eval: audit — clean repository', () => {
+describe('eval: review — clean repository', () => {
   let repoRoot: string;
   beforeEach(async () => { repoRoot = await setupFixture('empty-repo'); });
   afterEach(async () => { await rm(repoRoot, { recursive: true, force: true }); });
 
-  it('reports zero findings for an empty repo (no false positives)', async () => {
-    const result = await audit(repoRoot);
-    expect(result.findings).toHaveLength(0);
-    expect(result.existingFiles).toHaveLength(0);
+  it('reports zero existing files for an empty repo', async () => {
+    const files = await readExistingConfig(repoRoot);
+    expect(files).toHaveLength(0);
   });
 });
 

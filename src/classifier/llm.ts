@@ -1,4 +1,4 @@
-import type { FileProposal, RepositoryProfile, RepositoryProposal, ProposalAction } from './types.js';
+import type { FileProposal, RepositoryProposal, ProposalAction } from './types.js';
 import type { ConversationObservation } from '../knowledge/pipeline.js';
 
 const VALID_ACTIONS: ProposalAction[] = ['create', 'update', 'delete'];
@@ -17,7 +17,6 @@ const ALLOWED_PATH_PREFIXES = [
 
 export interface ReasoningContext {
   existingFiles: Array<{ path: string; content: string }>;
-  profile: RepositoryProfile;
   observations?: ConversationObservation[];
 }
 
@@ -99,19 +98,17 @@ function buildPrompt(context: ReasoningContext): string {
         ],
         summary: 'brief summary of proposed changes',
       },
-      repositoryProfile: context.profile,
       existingFiles: context.existingFiles,
       conversationObservations: context.observations ?? [],
       instructions: [
-        'Read the existing configuration files and conversation observations.',
+        'Read the existing configuration files and conversation observations carefully.',
         'Decide what knowledge is worth persisting and in which Copilot mechanism.',
-        'Prefer no instruction (omit) when a fact is discoverable from package.json, lockfiles, CI, or file structure.',
+        'Preserve existing repository-specific guidance unless it is clearly wrong or duplicated.',
+        'Prefer no instruction (omit) when a fact is discoverable from repository files.',
         'Use .github/copilot-instructions.md for repository-wide behavioural guidance.',
         'Use .github/instructions/<name>.instructions.md with applyTo for file-scoped guidance.',
         'Use .github/skills/<name>/SKILL.md for on-demand multi-step workflows.',
         'Use .github/prompts/<name>.prompt.md for explicitly user-invoked operations.',
-        'Decide what is worth preserving, what is discoverable, what is duplicated, what conflicts.',
-        'Decide whether to synthesise or rewrite existing content.',
         'All proposal paths must start with .github/.',
         'Return an empty proposals array if no changes are needed.',
       ],
@@ -165,4 +162,3 @@ function isSafePath(path: string): boolean {
     (prefix) => path === prefix.replace(/\/$/, '') || path.startsWith(prefix)
   );
 }
-
