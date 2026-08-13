@@ -200,7 +200,7 @@ async function buildRepositoryProfile(
   repoRoot: string,
   existingCopilotFiles: string[]
 ): Promise<RepositoryProfile> {
-  const lockfileCandidates = ['pnpm-lock.yaml', 'yarn.lock', 'package-lock.json', 'bun.lockb'];
+  const lockfileCandidates = ['pnpm-lock.yaml', 'yarn.lock', 'package-lock.json', 'bun.lock', 'bun.lockb'];
   const ciCandidates = ['.github/workflows/ci.yml', '.github/workflows/ci.yaml'];
   const testConfigCandidates = [
     'vitest.config.ts',

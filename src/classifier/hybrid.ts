@@ -52,6 +52,7 @@ export async function classifyHybrid(
   const deterministic = classify(item);
   const evidence = buildDeterministicEvidence(
     item,
+    deterministic,
     options.allItems ?? [item],
     options.repoProfile ?? emptyProfile(),
     options.precomputedSignals,
@@ -93,17 +94,15 @@ export async function classifyAllHybrid(
     overlap: detectSemanticOverlap(items),
     contradictions: detectContradictions(items),
   };
-  const results: SemanticClassificationResult[] = [];
-  for (const item of items) {
-    results.push(
-      await classifyHybrid(item, {
+  return Promise.all(
+    items.map((item) =>
+      classifyHybrid(item, {
         ...options,
         allItems: items,
         precomputedSignals,
-      }),
-    );
-  }
-  return results;
+      })
+    )
+  );
 }
 
 function shouldEscalateToLLM(
@@ -176,6 +175,7 @@ function fromDeterministic(
 
 function buildDeterministicEvidence(
   item: KnowledgeItem,
+  deterministicClassification: DeterministicClassificationEvidence['deterministicClassification'],
   items: KnowledgeItem[],
   repoProfile: RepositoryProfile,
   precomputedSignals?: {
@@ -195,7 +195,7 @@ function buildDeterministicEvidence(
   );
   const discoverable = detectDiscoverable([item]);
   return {
-    deterministicClassification: classify(item),
+    deterministicClassification,
     duplicateSignals: duplicates,
     overlapSignals: overlap,
     contradictionSignals: contradictions,
