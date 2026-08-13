@@ -35,20 +35,21 @@ async function main(): Promise<void> {
   });
   if (evaluated.decisions.length === 0) return;
   const grouped = groupRepresentationDecisions(evaluated.decisions);
+  const kept = evaluated.decisions.filter((decision) => decision.shouldPersist);
 
   console.log('\nInstruction Architect — Session knowledge proposals:\n');
-  for (const decision of evaluated.decisions.slice(0, 12)) {
+  for (const decision of kept.slice(0, 12)) {
     console.log(`  [${decision.semantic.classification}] ${decision.item.content}`);
   }
   console.log('');
-  console.log(`  Keep: ${evaluated.decisions.filter((d) => d.shouldPersist).length}`);
+  console.log(`  Keep: ${kept.length}`);
   console.log(`  Drop: ${grouped.dropped.length}`);
   if (grouped.path.size > 0) console.log(`  Path-scoped groups: ${grouped.path.size}`);
   if (grouped.skills.length > 0) console.log(`  Skill candidates: ${grouped.skills.length}`);
   if (grouped.prompts.length > 0) console.log(`  Prompt candidates: ${grouped.prompts.length}`);
   if (grouped.global.length > 0) console.log(`  Global candidates: ${grouped.global.length}`);
 
-  if (evaluated.decisions.some((decision) => decision.shouldPersist)) {
+  if (kept.length > 0) {
     console.log('\nRun `instruction-architect seed` to migrate accepted knowledge into repository AI files.');
   } else {
     console.log('\nNo persistent repository knowledge changes proposed.');

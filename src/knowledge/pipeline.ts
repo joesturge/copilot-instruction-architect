@@ -110,7 +110,7 @@ export async function evaluateKnowledgeItems(
       semantic.classification !== 'NONE' &&
       semantic.classification !== 'DOCUMENTATION_ONLY';
 
-    if (shouldPersist) seenCanonical.add(canonical);
+    seenCanonical.add(canonical);
 
     decisions.push({
       item,
@@ -231,6 +231,5 @@ function normalise(text: string): string {
     .replace(/[^a-z0-9\s]/g, '')
     .split(/\s+/)
     .filter(Boolean)
-    .sort()
     .join(' ');
 }
