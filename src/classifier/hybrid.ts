@@ -12,6 +12,7 @@ import {
   detectDuplicates,
   detectSemanticOverlap,
 } from './detector.js';
+import type { AuditFinding } from './types.js';
 
 export interface SemanticClassifierRequest {
   candidate: KnowledgeItem;
@@ -27,6 +28,11 @@ interface HybridClassificationOptions {
   semanticClassifier?: SemanticClassifier;
   allItems?: KnowledgeItem[];
   repoProfile?: RepositoryProfile;
+  precomputedSignals?: {
+    duplicates: AuditFinding[];
+    overlap: AuditFinding[];
+    contradictions: AuditFinding[];
+  };
 }
 
 const VALID_CLASSIFICATIONS: Classification[] = [
@@ -48,6 +54,7 @@ export async function classifyHybrid(
     item,
     options.allItems ?? [item],
     options.repoProfile ?? emptyProfile(),
+    options.precomputedSignals,
   );
 
   if (!shouldEscalateToLLM(item, evidence) || !options.semanticClassifier) {
@@ -81,12 +88,18 @@ export async function classifyAllHybrid(
   items: KnowledgeItem[],
   options: Omit<HybridClassificationOptions, 'allItems'> = {}
 ): Promise<SemanticClassificationResult[]> {
+  const precomputedSignals = {
+    duplicates: detectDuplicates(items),
+    overlap: detectSemanticOverlap(items),
+    contradictions: detectContradictions(items),
+  };
   const results: SemanticClassificationResult[] = [];
   for (const item of items) {
     results.push(
       await classifyHybrid(item, {
         ...options,
         allItems: items,
+        precomputedSignals,
       }),
     );
   }
@@ -164,11 +177,22 @@ function fromDeterministic(
 function buildDeterministicEvidence(
   item: KnowledgeItem,
   items: KnowledgeItem[],
-  repoProfile: RepositoryProfile
+  repoProfile: RepositoryProfile,
+  precomputedSignals?: {
+    duplicates: AuditFinding[];
+    overlap: AuditFinding[];
+    contradictions: AuditFinding[];
+  },
 ): DeterministicClassificationEvidence {
-  const duplicates = detectDuplicates(items).filter((f) => f.affectedItems.includes(item));
-  const overlap = detectSemanticOverlap(items).filter((f) => f.affectedItems.includes(item));
-  const contradictions = detectContradictions(items).filter((f) => f.affectedItems.includes(item));
+  const duplicates = (precomputedSignals?.duplicates ?? detectDuplicates(items)).filter((f) =>
+    f.affectedItems.includes(item)
+  );
+  const overlap = (precomputedSignals?.overlap ?? detectSemanticOverlap(items)).filter((f) =>
+    f.affectedItems.includes(item)
+  );
+  const contradictions = (precomputedSignals?.contradictions ?? detectContradictions(items)).filter((f) =>
+    f.affectedItems.includes(item)
+  );
   const discoverable = detectDiscoverable([item]);
   return {
     deterministicClassification: classify(item),
@@ -201,11 +225,12 @@ function collectAlternatives(chosen: Classification): Classification[] {
 }
 
 function deriveSuggestedPath(classification: Classification, item: KnowledgeItem): string | undefined {
+  const slug = slugFromContent(item.content);
   if (classification === 'GLOBAL_INSTRUCTION') return '.github/copilot-instructions.md';
-  if (classification === 'PATH_INSTRUCTION') return '.github/instructions/repository-guidance.instructions.md';
-  if (classification === 'SKILL') return '.github/skills/repository-workflow/SKILL.md';
-  if (classification === 'PROMPT') return '.github/prompts/repository-operation.prompt.md';
-  if (classification === 'AGENT') return '.github/agents/repository-agent.agent.md';
+  if (classification === 'PATH_INSTRUCTION') return `.github/instructions/${slug}.instructions.md`;
+  if (classification === 'SKILL') return `.github/skills/${slug}/SKILL.md`;
+  if (classification === 'PROMPT') return `.github/prompts/${slug}.prompt.md`;
+  if (classification === 'AGENT') return `.github/agents/${slug}.agent.md`;
   if (classification === 'DOCUMENTATION_ONLY') return item.sourceFile?.endsWith('.md') ? item.sourceFile : 'README.md';
   return undefined;
 }
@@ -285,4 +310,15 @@ function emptyProfile(): RepositoryProfile {
     copilotFiles: [],
     sourceOfTruthFiles: [],
   };
+}
+
+function slugFromContent(content: string): string {
+  const slug = content
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 4)
+    .join('-');
+  return slug || 'repository-guidance';
 }
