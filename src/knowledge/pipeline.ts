@@ -194,7 +194,6 @@ function extractConversationKnowledge(observations: ConversationObservation[]): 
       stability: count >= 2 ? 'high' : 'medium',
       discoverability: 'low',
       behaviouralValue: sample.type === 'security_issue' ? 'high' : 'medium',
-      extractionConfidence: sample.confidence === 'high' ? 0.9 : sample.confidence === 'medium' ? 0.7 : 0.5,
       relatedItems: [`observation_count:${count}`, `observation_type:${sample.type}`],
       rationale:
         count >= 2

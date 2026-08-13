@@ -14,7 +14,7 @@ describe('classifyHybrid', () => {
     const result = await classifyHybrid({ content: 'Always update tests when changing behaviour.' });
     expect(result.classification).toBe('GLOBAL_INSTRUCTION');
     expect(result.source).toBe('deterministic');
-    expect(result.confidence).toBeGreaterThan(0);
+    expect(result.confidence).toBe(0);
     expect(result.evidence.length).toBeGreaterThan(0);
   });
 
@@ -50,6 +50,27 @@ describe('classifyHybrid', () => {
     );
     expect(result.source).toBe('fallback');
     expect(result.classification).toBe('GLOBAL_INSTRUCTION');
+  });
+
+  it('keeps valid LLM output even with low confidence values', async () => {
+    const semantic = new StubSemanticClassifier({
+      classification: 'NONE',
+      confidence: 0.12,
+      reason: 'Likely discoverable and not behaviourally durable.',
+      scope: 'Repository/global by default',
+      value: 'Low value to persist.',
+      contextCost: 'Unnecessary context if persisted.',
+      maintenanceCost: 'Avoid maintenance by omitting.',
+      evidence: ['Looks discoverable from repository files.'],
+      alternatives: ['GLOBAL_INSTRUCTION', 'PATH_INSTRUCTION'],
+    });
+    const result = await classifyHybrid(
+      { content: 'This repository uses npm.' },
+      { semanticClassifier: semantic, allItems: [{ content: 'This repository uses npm.' }] }
+    );
+    expect(result.source).toBe('llm');
+    expect(result.confidence).toBe(0.12);
+    expect(result.classification).toBe('NONE');
   });
 
   it('detects obvious discoverable facts without semantic escalation', async () => {

@@ -15,9 +15,6 @@ import {
   groupRepresentationDecisions,
 } from '../knowledge/pipeline.js';
 
-const MAX_SEMANTIC_AUDIT_CANDIDATES = 8;
-const LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.6;
-
 /**
  * seed — analyse, bootstrap, migrate and normalise.
  *
@@ -112,7 +109,7 @@ export async function seed(repoRoot: string): Promise<string> {
  */
 export async function audit(repoRoot: string): Promise<AuditResult> {
   const semanticClassifier = createSemanticClassifierFromEnv();
-  const { items, existingFiles, findings: allFindings, decisions } =
+  const { items, existingFiles, findings: allFindings } =
     await evaluateRepositoryKnowledge(repoRoot, { semanticClassifier });
   const duplicates = allFindings.filter((f) => f.type === 'duplicate');
   const overlap = allFindings.filter((f) => f.type === 'overly_broad');
@@ -124,16 +121,6 @@ export async function audit(repoRoot: string): Promise<AuditResult> {
   if (contradictions.length > 0) recommendations.push(`Resolve ${contradictions.length} contradiction(s).`);
   if (overlap.length > 0) recommendations.push(`Review ${overlap.length} overlapping rule(s) for consolidation.`);
   if (discoverable.length > 0) recommendations.push(`Remove ${discoverable.length} instruction(s) describing discoverable facts.`);
-
-  const lowConfidence = decisions
-    .filter((decision) => decision.semantic.source !== 'deterministic')
-    .filter((decision) => decision.semantic.confidence < LOW_CONFIDENCE_REVIEW_THRESHOLD)
-    .slice(0, MAX_SEMANTIC_AUDIT_CANDIDATES);
-  if (lowConfidence.length > 0) {
-    recommendations.push(
-      `Review ${lowConfidence.length} semantically ambiguous item(s) before making automatic changes.`
-    );
-  }
 
   // Rough estimate of context reduction potential.
   const reducibleItems = duplicates.length + discoverable.length;

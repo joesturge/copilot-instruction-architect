@@ -44,7 +44,6 @@ const VALID_CLASSIFICATIONS: Classification[] = [
   'AGENT',
   'DOCUMENTATION_ONLY',
 ];
-const MIN_LLM_CONFIDENCE = 0.55;
 
 export async function classifyHybrid(
   item: KnowledgeItem,
@@ -68,12 +67,10 @@ export async function classifyHybrid(
     .classify({ candidate: item, evidence, relatedItems })
     .catch(() => null);
   const validated = validateSemanticResult(raw);
-  if (!validated || validated.confidence < MIN_LLM_CONFIDENCE) {
+  if (!validated) {
     const fallback = fromDeterministic(item, evidence);
     fallback.source = 'fallback';
-    fallback.reason = validated
-      ? `${fallback.reason} LLM confidence was too low, so deterministic fallback was used.`
-      : `${fallback.reason} LLM response was invalid, so deterministic fallback was used.`;
+    fallback.reason = `${fallback.reason} LLM response was invalid, so deterministic fallback was used.`;
     return fallback;
   }
 
@@ -124,10 +121,9 @@ function fromDeterministic(
   evidence: DeterministicClassificationEvidence
 ): SemanticClassificationResult {
   const base = evidence.deterministicClassification;
-  const confidence = base.confidence === 'high' ? 0.85 : base.confidence === 'medium' ? 0.65 : 0.45;
   return {
     classification: base.classification,
-    confidence,
+    confidence: 0,
     reason: base.reason,
     scope: item.pathGlob ? `Path-scoped (${item.pathGlob})` : 'Repository/global by default',
     value:

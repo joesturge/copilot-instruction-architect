@@ -62,7 +62,6 @@ export function extractKnowledgeFromMarkdown(
           stability: 'medium',
           discoverability: 'low',
           behaviouralValue: 'medium',
-          extractionConfidence: 0.9,
           rationale: 'Extracted from existing repository guidance source.',
         });
         extractedIndex++;
