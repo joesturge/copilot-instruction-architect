@@ -94,12 +94,13 @@ async function applyConversationLearning(
     const name = `conversation-${slugify(glob)}`;
     const file = `.github/instructions/${name}.instructions.md`;
     const existing = await readUtf8(join(repoRoot, file));
+    const existingBody = stripFrontMatter(existing);
     const next = appendUniqueBulletSection(
-      stripFrontMatter(existing),
+      existingBody,
       'Conversation-learned guidance',
       bucket.map((d) => d.item.content),
     );
-    if (existing !== withPathFrontMatter(glob, next)) {
+    if (next !== existingBody || extractApplyTo(existing) !== glob) {
       await writePathInstruction(repoRoot, name, glob, next);
       touched.push(file);
     }
@@ -163,11 +164,12 @@ function slugify(text: string): string {
 }
 
 function stripFrontMatter(content: string): string {
-  return content.replace(/^---[\s\S]*?---\n*/m, '');
+  return content.replace(/^---[\s\S]*?---\n*/, '');
 }
 
-function withPathFrontMatter(glob: string, content: string): string {
-  return `---\napplyTo: '${glob}'\n---\n\n${content}`;
+function extractApplyTo(content: string): string | undefined {
+  const match = content.match(/^---\s*\napplyTo:\s*['"]?([^'"\n]+)['"]?\s*\n---/);
+  return match?.[1]?.trim();
 }
 
 async function readUtf8(path: string): Promise<string> {
