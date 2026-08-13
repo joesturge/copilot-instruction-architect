@@ -1,10 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { classifyHybrid, type SemanticClassifier } from '../src/classifier/hybrid.js';
+import {
+  classifyHybrid,
+  type SemanticClassifier,
+  type SemanticClassifierRequest,
+} from '../src/classifier/hybrid.js';
 import type { KnowledgeItem } from '../src/classifier/types.js';
 
 class StubSemanticClassifier implements SemanticClassifier {
   constructor(private readonly payload: unknown) {}
   async classify(): Promise<unknown> {
+    return this.payload;
+  }
+}
+
+class CapturingSemanticClassifier implements SemanticClassifier {
+  request: SemanticClassifierRequest | undefined;
+  constructor(private readonly payload: unknown) {}
+  async classify(request: SemanticClassifierRequest): Promise<unknown> {
+    this.request = request;
     return this.payload;
   }
 }
@@ -71,6 +84,26 @@ describe('classifyHybrid', () => {
     expect(result.source).toBe('llm');
     expect(result.confidence).toBe(0.12);
     expect(result.classification).toBe('NONE');
+  });
+
+  it('sends neutral deterministic classification evidence to the LLM path', async () => {
+    const semantic = new CapturingSemanticClassifier({
+      classification: 'GLOBAL_INSTRUCTION',
+      confidence: 0.9,
+      reason: 'Durable behavioural rule.',
+      scope: 'Repository/global by default',
+      value: 'Useful across tasks.',
+      contextCost: 'Always loaded context; keep concise.',
+      maintenanceCost: 'Moderate maintenance cost.',
+      evidence: ['Observed repeated behaviour'],
+      alternatives: ['NONE', 'PATH_INSTRUCTION'],
+    });
+    await classifyHybrid(
+      { content: 'Always update tests when changing behaviour.' },
+      { semanticClassifier: semantic, allItems: [{ content: 'Always update tests when changing behaviour.' }] }
+    );
+    expect(semantic.request?.evidence.deterministicClassification.classification).toBe('NONE');
+    expect(semantic.request?.evidence.deterministicClassification.confidence).toBe('low');
   });
 
   it('detects obvious discoverable facts without semantic escalation', async () => {

@@ -84,6 +84,7 @@ function buildPrompt(request: SemanticClassifierRequest): string {
       deterministicEvidence: request.evidence,
       relatedItems: request.relatedItems,
       instructions: [
+        'Follow this pipeline: gather evidence → decide semantics → return structured proposal.',
         'Treat duplicate/overlap/contradiction/discoverable signals as evidence, not automatic truth.',
         'Decide what the repository should remember and how it should be represented based on the full evidence.',
         'Prefer NONE if discoverable and not behaviourally valuable.',

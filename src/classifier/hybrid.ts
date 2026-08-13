@@ -49,26 +49,40 @@ export async function classifyHybrid(
   item: KnowledgeItem,
   options: HybridClassificationOptions = {}
 ): Promise<SemanticClassificationResult> {
-  const deterministic = classify(item);
+  if (!options.semanticClassifier || !item.content.trim()) {
+    const deterministic = classify(item);
+    const evidence = buildDeterministicEvidence(
+      item,
+      deterministic,
+      options.allItems ?? [item],
+      options.repoProfile ?? emptyProfile(),
+      options.precomputedSignals,
+    );
+    return fromDeterministic(item, evidence);
+  }
+
   const evidence = buildDeterministicEvidence(
     item,
-    deterministic,
+    neutralDeterministicClassification(),
     options.allItems ?? [item],
     options.repoProfile ?? emptyProfile(),
     options.precomputedSignals,
   );
-
-  if (!options.semanticClassifier || !item.content.trim()) {
-    return fromDeterministic(item, evidence);
-  }
-
   const relatedItems = findRelatedItems(item, options.allItems ?? [item]);
   const raw = await options.semanticClassifier
     .classify({ candidate: item, evidence, relatedItems })
     .catch(() => null);
   const validated = validateSemanticResult(raw);
   if (!validated) {
-    const fallback = fromDeterministic(item, evidence);
+    const deterministic = classify(item);
+    const fallbackEvidence = buildDeterministicEvidence(
+      item,
+      deterministic,
+      options.allItems ?? [item],
+      options.repoProfile ?? emptyProfile(),
+      options.precomputedSignals,
+    );
+    const fallback = fromDeterministic(item, fallbackEvidence);
     fallback.source = 'fallback';
     fallback.reason = `${fallback.reason} LLM response was invalid, so deterministic fallback was used.`;
     return fallback;
@@ -78,7 +92,7 @@ export async function classifyHybrid(
     ...validated,
     suggestedPath: deriveSuggestedPath(validated.classification, item),
     suggestedPathGlob:
-      validated.classification === 'PATH_INSTRUCTION' ? item.pathGlob ?? deterministic.suggestedPathGlob : undefined,
+      validated.classification === 'PATH_INSTRUCTION' ? item.pathGlob ?? validated.suggestedPathGlob : undefined,
     source: 'llm',
   };
 }
@@ -183,7 +197,7 @@ function buildDeterministicEvidence(
 
 function deterministicEvidenceSummary(evidence: DeterministicClassificationEvidence): string[] {
   const out: string[] = [];
-  out.push(`Deterministic classification: ${evidence.deterministicClassification.classification}`);
+  out.push(`Deterministic fallback classification: ${evidence.deterministicClassification.classification}`);
   if (evidence.repoProfile.packageManager) {
     out.push(`Detected package manager: ${evidence.repoProfile.packageManager}`);
   }
@@ -195,6 +209,14 @@ function deterministicEvidenceSummary(evidence: DeterministicClassificationEvide
   pushSignalEvidence(out, 'Contradiction evidence', evidence.contradictionSignals);
   pushSignalEvidence(out, 'Discoverable evidence', evidence.discoverableSignals);
   return out;
+}
+
+function neutralDeterministicClassification(): DeterministicClassificationEvidence['deterministicClassification'] {
+  return {
+    classification: 'NONE',
+    confidence: 'low',
+    reason: 'Deterministic layer only gathers evidence; semantic decisions are deferred to the LLM.',
+  };
 }
 
 function pushSignalEvidence(out: string[], label: string, findings: AuditFinding[]): void {

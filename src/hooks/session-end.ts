@@ -90,17 +90,18 @@ async function applyConversationLearning(
     }
   }
 
-  for (const [glob, bucket] of grouped.path) {
+  for (const [glob, bucket] of grouped.path.entries()) {
     const name = `conversation-${slugify(glob)}`;
     const file = `.github/instructions/${name}.instructions.md`;
     const existing = await readUtf8(join(repoRoot, file));
     const existingBody = stripFrontMatter(existing);
+    const existingApplyTo = extractApplyTo(existing);
     const next = appendUniqueBulletSection(
       existingBody,
       'Conversation-learned guidance',
       bucket.map((d) => d.item.content),
     );
-    if (next !== existingBody || extractApplyTo(existing) !== glob) {
+    if (next !== existingBody || (existingApplyTo !== undefined && existingApplyTo !== glob)) {
       await writePathInstruction(repoRoot, name, glob, next);
       touched.push(file);
     }
