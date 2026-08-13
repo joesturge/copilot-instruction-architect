@@ -19,7 +19,6 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { seed } from '../../src/commands/commands.js';
 import { readExistingConfig } from '../../src/analyser/analyser.js';
-import { readGlobalInstructions } from '../../src/io/writer.js';
 import { getBaseline } from '../../src/baseline/baseline.js';
 
 const FIXTURES = resolve(new URL('../fixtures', import.meta.url).pathname);
@@ -39,24 +38,17 @@ describe('eval: seed — empty repository', () => {
   beforeEach(async () => { repoRoot = await setupFixture('empty-repo'); });
   afterEach(async () => { await rm(repoRoot, { recursive: true, force: true }); });
 
-  it('creates copilot-instructions.md with all baseline sections', async () => {
+  it('does not create copilot-instructions.md without LLM', async () => {
     const output = await seed(repoRoot);
-    expect(output).toContain('copilot-instructions.md');
-    const content = await readGlobalInstructions(repoRoot);
-    expect(content).toContain('## Documentation');
-    expect(content).toContain('## Testing');
-    expect(content).toContain('## Security');
-    expect(content).toContain('## Code quality');
-    expect(content).toContain('## Collaboration');
+    expect(output).toMatch(/llm|api[_-]?key/i);
+    const files = await readExistingConfig(repoRoot);
+    expect(files.some((f) => f.path === '.github/copilot-instructions.md')).toBe(false);
   });
 
-  it('baseline written to empty repo does not contain technology-specific facts', async () => {
-    await seed(repoRoot);
-    const content = await readGlobalInstructions(repoRoot);
-    // Baseline must not mention specific tools — those are discoverable.
-    expect(content).not.toMatch(/\bpnpm\b/);
-    expect(content).not.toMatch(/\bnpm\b/);
-    expect(content).not.toMatch(/\byarn\b/);
+  it('is idempotent without LLM', async () => {
+    const first = await seed(repoRoot);
+    const second = await seed(repoRoot);
+    expect(second).toBe(first);
   });
 });
 
@@ -110,12 +102,10 @@ describe('eval: seed — baseline does not introduce secrets', () => {
   beforeEach(async () => { repoRoot = await setupFixture('empty-repo'); });
   afterEach(async () => { await rm(repoRoot, { recursive: true, force: true }); });
 
-  it('baseline written to an empty repo contains no secret patterns', async () => {
+  it('seed without LLM writes no files and therefore introduces no secrets', async () => {
     await seed(repoRoot);
-    const content = await readGlobalInstructions(repoRoot);
-    expect(content).not.toMatch(/AKIA[0-9A-Z]{16}/);
-    expect(content).not.toMatch(/ghp_[A-Za-z0-9]{36}/);
-    expect(content).not.toContain('supersecretpassword123');
+    const files = await readExistingConfig(repoRoot);
+    expect(files).toHaveLength(0);
   });
 });
 

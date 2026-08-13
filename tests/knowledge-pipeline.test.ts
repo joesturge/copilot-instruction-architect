@@ -38,6 +38,30 @@ describe('knowledge pipeline', () => {
     }
   });
 
+  it('includes additional context files in LLM input when provided', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-pipeline-'));
+    try {
+      let capturedContext: ReasoningContext | undefined;
+      const mockLLM: LLMReasoner = {
+        async propose(ctx) {
+          capturedContext = ctx;
+          return { proposals: [], summary: 'ok' };
+        },
+      };
+      await proposeRepositoryChanges(repoRoot, {
+        llm: mockLLM,
+        additionalContextFiles: [
+          { path: '__baseline_reference__', content: '## Baseline' },
+        ],
+      });
+      expect(
+        capturedContext?.existingFiles.some((f) => f.path === '__baseline_reference__')
+      ).toBe(true);
+    } finally {
+      await rm(repoRoot, { recursive: true });
+    }
+  });
+
   it('passes conversation observations to the LLM', async () => {
     const repoRoot = await mkdtemp(join(tmpdir(), 'ia-pipeline-'));
     try {

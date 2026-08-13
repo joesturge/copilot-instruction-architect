@@ -33,7 +33,7 @@ Session hooks (`sessionStart`, `sessionEnd`) are plain shell/PowerShell scripts 
 
 ## LLM configuration
 
-Session learning and the `seed`/`improve` commands use an LLM for reasoning. Without one, the plugin can still bootstrap empty repositories and show observations for manual review.
+Session learning and the `seed`/`improve` commands use an LLM for reasoning.
 
 ```sh
 export INSTRUCTION_ARCHITECT_LLM_API_KEY=sk-...
@@ -56,11 +56,14 @@ instruction-architect baseline   # inspect baseline version and content
 
 ## How seed works
 
-`seed` is the main setup command. Its behaviour depends on what already exists:
+`seed` is the main setup command. It always uses LLM reasoning:
 
-**Empty repository** — writes the baseline directly. No LLM required.
+- It gathers existing repository AI configuration (if any)
+- It includes the baseline as reference input
+- It asks the LLM to produce a structured proposal
+- It validates proposal paths mechanically, then applies safe changes
 
-**Repository with existing configuration** — passes the existing files and the baseline to the LLM, then applies the resulting validated proposal. Existing repository-specific knowledge is preserved. The LLM decides how to combine, reorganise, or deduplicate content. Nothing is overwritten without LLM reasoning.
+This keeps the baseline as input knowledge rather than copying it wholesale into global instructions. The LLM decides what should be global, path-scoped, skill-based, prompt-based, or omitted entirely.
 
 `seed` is safe to re-run. Running it a second time on an already well-configured repository should produce no changes.
 
@@ -159,8 +162,7 @@ Changes can also be reviewed in your normal git workflow: `git diff`, `git statu
 
 Without `INSTRUCTION_ARCHITECT_LLM_API_KEY`:
 
-- `seed` writes the baseline to empty repositories
-- `seed` on repositories with existing configuration reports that an LLM is needed
+- `seed` reports that an LLM is required and makes no repository changes
 - `improve` reports that an LLM is needed
 - Session hook in `suggest`/`review` mode shows observations for manual consideration
 - Session hook in `automatic` mode does nothing and reports the limitation

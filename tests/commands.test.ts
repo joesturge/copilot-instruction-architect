@@ -11,15 +11,14 @@ async function createTempRepo(): Promise<string> {
 }
 
 describe('seed', () => {
-  it('creates copilot-instructions.md in an empty repository', async () => {
+  it('does not write baseline files without LLM in an empty repository', async () => {
     const repoRoot = await createTempRepo();
     try {
       const output = await seed(repoRoot);
-      expect(output).toContain('copilot-instructions.md');
-      const content = await readGlobalInstructions(repoRoot);
-      expect(content).toContain('Documentation');
-      expect(content).toContain('Testing');
-      expect(content).toContain('Security');
+      expect(output).toMatch(/llm|api[_-]?key/i);
+      await expect(
+        access(join(repoRoot, '.github', 'copilot-instructions.md'))
+      ).rejects.toThrow();
     } finally {
       await rm(repoRoot, { recursive: true });
     }
@@ -28,11 +27,8 @@ describe('seed', () => {
   it('is idempotent — re-running does not cause churn', async () => {
     const repoRoot = await createTempRepo();
     try {
-      await seed(repoRoot);
-      const firstRun = await readGlobalInstructions(repoRoot);
-      await seed(repoRoot);
-      const secondRun = await readGlobalInstructions(repoRoot);
-      // Without LLM, seed does not modify existing config on second run.
+      const firstRun = await seed(repoRoot);
+      const secondRun = await seed(repoRoot);
       expect(firstRun).toBe(secondRun);
     } finally {
       await rm(repoRoot, { recursive: true });
@@ -57,18 +53,18 @@ describe('seed', () => {
     }
   });
 
-  it('writes baseline to a repo that has other AI config but no copilot-instructions.md', async () => {
+  it('does not write baseline to a repo that has other AI config but no copilot-instructions.md', async () => {
     const repoRoot = await createTempRepo();
     try {
       await writeFile(
         join(repoRoot, 'AGENTS.md'),
         '## Testing\n\n- Always update tests when changing behaviour.\n'
       );
-      await seed(repoRoot);
-      // No LLM: AGENTS.md exists but no copilot-instructions.md — safe to write baseline.
-      const content = await readGlobalInstructions(repoRoot);
-      expect(content).toContain('Documentation');
-      expect(content).toContain('Testing');
+      const output = await seed(repoRoot);
+      expect(output).toMatch(/llm|api[_-]?key/i);
+      await expect(
+        access(join(repoRoot, '.github', 'copilot-instructions.md'))
+      ).rejects.toThrow();
     } finally {
       await rm(repoRoot, { recursive: true });
     }

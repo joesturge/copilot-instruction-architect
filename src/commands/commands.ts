@@ -1,10 +1,7 @@
 import { mkdir, writeFile, unlink } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { createLLMReasonerFromEnv, validateProposal } from '../reasoner/llm.js';
+import { createLLMReasonerFromEnv } from '../reasoner/llm.js';
 import { getBaseline } from '../baseline/baseline.js';
-import {
-  writeGlobalInstructions,
-} from '../io/writer.js';
 import type { FileProposal } from '../reasoner/types.js';
 import { proposeRepositoryChanges } from '../knowledge/pipeline.js';
 import { readExistingConfig } from '../analyser/analyser.js';
@@ -13,75 +10,36 @@ import { loadState } from '../state/state.js';
 /**
  * seed — bootstrap, migrate, and normalise AI configuration.
  *
- * For an empty repository: writes the baseline directly (no LLM needed).
- *
- * For a repository with existing configuration: passes the existing files
- * AND the baseline (as a reference) to the LLM, then applies the resulting
- * validated proposal. Existing repository-specific knowledge is preserved —
- * the LLM decides how to combine, reorganise or deduplicate content.
+ * Passes existing configuration plus the baseline reference through the same
+ * LLM reasoning pipeline used for repository improvements, then applies the
+ * validated proposal.
  */
 export async function seed(repoRoot: string): Promise<string> {
   const llm = createLLMReasonerFromEnv();
   const baseline = getBaseline();
   const state = await loadState();
-  const existing = await readExistingConfig(repoRoot);
   const lines: string[] = ['# Instruction Architect — Seed\n'];
 
-  if (existing.length === 0) {
-    // Empty repository — write the baseline directly; no LLM needed.
-    await writeGlobalInstructions(repoRoot, baseline.globalInstructions);
-    lines.push('✓ Wrote .github/copilot-instructions.md (baseline)');
-    if (!llm) {
-      lines.push('');
-      lines.push('Tip: Set INSTRUCTION_ARCHITECT_LLM_API_KEY to allow the LLM to review and improve configuration.');
-    }
-    return lines.join('\n');
-  }
-
-  // Repository has existing configuration.
   if (!llm) {
-    const hasGlobalInstructions = existing.some(
-      (f) => f.path === '.github/copilot-instructions.md'
-    );
-    if (!hasGlobalInstructions) {
-      // No global instructions file yet — safe to write the baseline.
-      await writeGlobalInstructions(repoRoot, baseline.globalInstructions);
-      lines.push('✓ Wrote .github/copilot-instructions.md (baseline)');
-      lines.push('');
-      lines.push('Set INSTRUCTION_ARCHITECT_LLM_API_KEY to let the LLM merge other existing configuration files.');
-    } else {
-      lines.push('Existing configuration detected.');
-      lines.push('Set INSTRUCTION_ARCHITECT_LLM_API_KEY to let the LLM review and improve it.');
-    }
+    lines.push('LLM reasoning is required for seed to architect baseline guidance into repository configuration.');
+    lines.push('Set INSTRUCTION_ARCHITECT_LLM_API_KEY to enable seed.');
     return lines.join('\n');
   }
 
-  // LLM available — include existing files and the baseline as reference context,
-  // then let the LLM decide how to combine them. The baseline is passed as a
-  // reference file so the LLM knows what standard baseline guidance looks like.
-  const existingWithBaseline = [
-    ...existing,
-    {
-      path: '__baseline_reference__ (standard baseline — not a real file)',
-      content: baseline.globalInstructions,
-    },
-  ];
-
-  const { proposals, summary } = await llm
-    .propose({
-      existingFiles: existingWithBaseline,
-      observations: [],
-      preferences: { language: state.preferences.language, style: state.preferences.style },
-    })
-    .then(validateProposal)
-    .catch((err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`Instruction Architect: LLM reasoning failed — ${message}`);
-      return { proposals: [], summary: 'LLM reasoning failed.' };
-    });
+  const { proposals, summary } = await proposeRepositoryChanges(repoRoot, {
+    llm,
+    observations: [],
+    preferences: { language: state.preferences.language, style: state.preferences.style },
+    additionalContextFiles: [
+      {
+        path: '__baseline_reference__ (standard baseline — not a real file)',
+        content: baseline.globalInstructions,
+      },
+    ],
+  });
 
   if (proposals.length === 0) {
-    lines.push(summary || 'No changes needed — configuration is already well-organised.');
+    lines.push(summary || 'No changes needed.');
     return lines.join('\n');
   }
 

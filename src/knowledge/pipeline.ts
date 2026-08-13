@@ -26,7 +26,12 @@ export interface ConversationObservation {
  */
 export async function proposeRepositoryChanges(
   repoRoot: string,
-  options: { llm?: LLMReasoner; observations?: ConversationObservation[]; preferences?: UserPreferences } = {}
+  options: {
+    llm?: LLMReasoner;
+    observations?: ConversationObservation[];
+    preferences?: UserPreferences;
+    additionalContextFiles?: Array<{ path: string; content: string }>;
+  } = {}
 ): Promise<RepositoryProposal> {
   if (!options.llm) {
     return { proposals: [], summary: 'No LLM configured. Set INSTRUCTION_ARCHITECT_LLM_API_KEY to enable reasoning.' };
@@ -34,7 +39,7 @@ export async function proposeRepositoryChanges(
 
   const existingFiles = await readExistingConfig(repoRoot);
   const context: ReasoningContext = {
-    existingFiles,
+    existingFiles: [...existingFiles, ...(options.additionalContextFiles ?? [])],
     observations: options.observations,
     preferences: options.preferences,
   };
