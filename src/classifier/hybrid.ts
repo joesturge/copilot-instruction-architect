@@ -94,15 +94,26 @@ export async function classifyAllHybrid(
     overlap: detectSemanticOverlap(items),
     contradictions: detectContradictions(items),
   };
-  return Promise.all(
-    items.map((item) =>
-      classifyHybrid(item, {
+  const concurrency = 4;
+  const results: SemanticClassificationResult[] = new Array(items.length);
+  let index = 0;
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const current = index;
+      index++;
+      if (current >= items.length) return;
+      results[current] = await classifyHybrid(items[current], {
         ...options,
         allItems: items,
         precomputedSignals,
-      })
-    )
-  );
+      });
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
 }
 
 function shouldEscalateToLLM(

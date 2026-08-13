@@ -264,7 +264,7 @@ async function buildRepositoryProfile(
   if (!packageManager) {
     if (lockfiles.includes('pnpm-lock.yaml')) packageManager = 'pnpm';
     else if (lockfiles.includes('yarn.lock')) packageManager = 'yarn';
-    else if (lockfiles.includes('bun.lockb')) packageManager = 'bun';
+    else if (lockfiles.includes('bun.lock') || lockfiles.includes('bun.lockb')) packageManager = 'bun';
     else if (lockfiles.includes('package-lock.json')) packageManager = 'npm';
   }
 
