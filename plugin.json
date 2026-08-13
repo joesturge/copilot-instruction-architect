@@ -1,14 +1,26 @@
 {
   "name": "instruction-architect",
-  "description": "Teaches the current Copilot session how to improve repository instructions, skills, prompts, agents and supporting documentation with minimal plugin code.",
-  "version": "0.1.0",
+  "description": "Markdown-only GitHub Copilot plugin for improving repository instructions, prompts, skills, and agents.",
+  "version": "0.2.0",
   "author": {
     "name": "Joe Sturge",
     "url": "https://github.com/joesturge"
   },
   "repository": "https://github.com/joesturge/copilot-instruction-architect",
   "license": "MIT",
-  "keywords": ["copilot", "instructions", "ai-config", "optimisation"],
-  "skills": ["skills/"],
-  "hooks": "hooks.json"
+  "keywords": ["copilot", "plugin", "instructions", "prompts", "skills"],
+  "skills": "skills/",
+  "hooks": {
+    "version": 1,
+    "hooks": {
+      "sessionStart": [
+        {
+          "type": "command",
+          "bash": "printf '{\"additionalContext\":\"The instruction-architect plugin is active. Use it to improve durable GitHub Copilot customisation only when there is genuine future value. Prefer the smallest useful Markdown-based change, preserve existing repository knowledge, and avoid introducing runtime code, state, or duplicate documentation.\"}\\n'",
+          "powershell": "Write-Output '{\"additionalContext\":\"The instruction-architect plugin is active. Use it to improve durable GitHub Copilot customisation only when there is genuine future value. Prefer the smallest useful Markdown-based change, preserve existing repository knowledge, and avoid introducing runtime code, state, or duplicate documentation.\"}'",
+          "timeoutSec": 10
+        }
+      ]
+    }
+  }
 }

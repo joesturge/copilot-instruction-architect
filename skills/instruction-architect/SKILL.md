@@ -1,51 +1,57 @@
+---
+name: instruction-architect
+description: Improve a repository's GitHub Copilot customisation using the current conversation, repository context, and native Markdown artefacts.
+---
+
 # Instruction Architect
 
-Improve a repository's GitHub Copilot AI configuration.
+Instruction Architect is a GitHub Copilot customisation capability, not a separate runtime.
 
-Instruction Architect is not a separate AI system. It teaches the current Copilot session how to improve the repository's instructions, skills, prompts, agents and supporting documentation using the current conversation and repository tools.
+Use it when a repository would benefit from better persistent Copilot guidance.
 
-## Commands
+## Core model
 
-### /instruction-architect seed
+Copilot
+→ Instruction Architect plugin
+→ Markdown instructions, skills, prompts, and agents
+→ Copilot performs the work
 
-Bootstrap, migrate, or restructure AI configuration for this repository using the current Copilot session.
+## Operating principles
 
-- Review existing AI configuration and relevant docs before proposing changes.
-- Use the baseline as reference guidance, not something to copy wholesale.
-- Preserve repository-specific knowledge unless it is clearly wrong, duplicated, stale, or better represented elsewhere.
-- Choose the smallest useful representation: global instructions, applyTo-scoped instructions, a skill, a prompt, an agent, documentation, or no change.
+- Use the current conversation and repository context directly.
+- Do not introduce plugin-side reasoning, state, classifiers, prompt engines, or repository scanners.
+- Prefer normal Copilot customisation files as the persistent output.
+- Preserve useful existing repository guidance.
+- Prefer no change over unnecessary customisation.
+- Keep changes small, focused, and low-maintenance.
+- Avoid duplicating information that already exists or is trivially discoverable from the source.
+- Keep global instructions genuinely global.
+- Use `applyTo` instructions only when guidance is truly path-specific.
+- Introduce skills, prompts, or agents only when they provide a real benefit.
 
-### /instruction-architect improve
+## Placement guidance
 
-Review existing configuration and propose the smallest useful improvement using the active Copilot conversation.
+Choose the smallest useful destination for each durable piece of knowledge:
 
-### /instruction-architect review
+- `.github/copilot-instructions.md` for repository-wide guidance
+- `.github/instructions/*.instructions.md` for path-specific guidance
+- `.github/skills/*/SKILL.md` for reusable multi-step capability
+- `.github/prompts/*.prompt.md` for explicit user-invoked operations
+- `.github/agents/*.agent.md` only when a distinct agent is genuinely useful
+- documentation when human readers benefit
+- nowhere when the information is trivial, duplicated, transient, or not worth persisting
 
-List all existing AI configuration files in this repository.
+## Boundaries
 
-### /instruction-architect baseline
+- Do not copy large baselines into a repository unless that is clearly the best representation.
+- Do not overwrite existing knowledge merely to make the structure look cleaner.
+- Do not add special runtimes, API keys, databases, or configuration files just to support the customisation.
+- Do not recreate capabilities Copilot already has.
 
-Inspect the current baseline version and content.
+## Explicit operations
 
-## Where knowledge belongs
+When the user asks for a specific operation, use the matching prompt file in this repository:
 
-| Situation | Location |
-|-----------|----------|
-| Repository-wide behavioural guidance | `.github/copilot-instructions.md` |
-| File-type or path-scoped guidance | `.github/instructions/<name>.instructions.md` with `applyTo` |
-| On-demand multi-step workflow | `.github/skills/<name>/SKILL.md` |
-| Explicitly user-invoked operation | `.github/prompts/<name>.prompt.md` |
-| Already discoverable from repository files | Omit — do not add |
-
-## Principles for Copilot
-
-When reasoning about what to persist in the current Copilot session:
-
-- **Preserve existing knowledge.** Read all existing configuration before proposing changes. Never discard repository-specific guidance unless it is clearly wrong or duplicated.
-- **Prefer no change.** Only propose a change when there is a clear benefit. An empty proposal is often the correct outcome.
-- **Avoid discoverable facts.** Do not add instructions for things the agent can already determine from `package.json`, lockfiles, CI configuration, or repository structure.
-- **Avoid duplication.** Do not add knowledge that already appears in existing configuration files.
-- **Prefer the smallest useful change.** Add, update, or reorganise only what is necessary.
-- **Ignore transient observations.** One-off debugging steps, task-specific details, temporary workarounds, and incidental implementation decisions do not belong in persistent configuration.
-- **Let Copilot decide.** Do not rely on plugin-side heuristics or classifiers to make semantic persistence decisions.
-- **Act during development.** Instruction Architect is relevant whenever useful durable knowledge surfaces — not only when explicitly invoked. Recognise opportunities during normal development conversations.
+- `.github/prompts/seed.prompt.md`
+- `.github/prompts/improve.prompt.md`
+- `.github/prompts/review.prompt.md`

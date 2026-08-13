@@ -1,0 +1,19 @@
+{
+  "name": "instruction-architect-marketplace",
+  "owner": {
+    "name": "Joe Sturge",
+    "email": "joe@joesturge.com"
+  },
+  "metadata": {
+    "description": "Marketplace for the markdown-only Instruction Architect GitHub Copilot plugin.",
+    "version": "0.2.0"
+  },
+  "plugins": [
+    {
+      "name": "instruction-architect",
+      "description": "Helps Copilot improve repository instructions, prompts, skills, and agents using native Markdown customisation.",
+      "version": "0.2.0",
+      "source": "."
+    }
+  ]
+}
