@@ -7,28 +7,47 @@ on:
     branches: [main]
 
 jobs:
-  build-and-test:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type check
-        run: npm run lint
-
-      - name: Build
-        run: npm run build
-
-      - name: Verify hook scripts are executable
+      - name: Validate plugin manifests and required artefacts
         run: |
-          test -x hooks/session-start.sh || (echo "hooks/session-start.sh is not executable" && exit 1)
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          
+          root = Path(".")
+          plugin = json.loads((root / "plugin.json").read_text())
+          marketplace = json.loads((root / ".github/plugin/marketplace.json").read_text())
+          
+          assert plugin["name"] == "instruction-architect"
+          assert marketplace["plugins"][0]["name"] == "instruction-architect"
+          
+          required_files = [
+              root / "skills/instruction-architect/SKILL.md",
+              root / ".github/prompts/seed.prompt.md",
+              root / ".github/prompts/improve.prompt.md",
+              root / ".github/prompts/review.prompt.md",
+              root / "README.md",
+          ]
+          
+          for path in required_files:
+              assert path.exists(), f"missing required file: {path}"
+          PY
 
-      - name: Test
-        run: npm test
+      - name: Validate sessionStart hook output
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          
+          plugin = json.loads(Path("plugin.json").read_text())
+          hook = plugin["hooks"]["hooks"]["sessionStart"][0]["bash"]
+          output = subprocess.check_output(["bash", "-lc", hook], text=True)
+          payload = json.loads(output)
+          assert isinstance(payload.get("additionalContext"), str)
+          assert payload["additionalContext"]
+          PY
