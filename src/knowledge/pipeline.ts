@@ -1,7 +1,7 @@
 import { readExistingConfig } from '../analyser/analyser.js';
-import type { RepositoryProposal } from '../classifier/types.js';
-import { validateProposal } from '../classifier/llm.js';
-import type { LLMReasoner, ReasoningContext } from '../classifier/llm.js';
+import type { RepositoryProposal } from '../reasoner/types.js';
+import { validateProposal } from '../reasoner/llm.js';
+import type { LLMReasoner, ReasoningContext, UserPreferences } from '../reasoner/llm.js';
 
 export interface ConversationObservation {
   description: string;
@@ -26,7 +26,7 @@ export interface ConversationObservation {
  */
 export async function proposeRepositoryChanges(
   repoRoot: string,
-  options: { llm?: LLMReasoner; observations?: ConversationObservation[] } = {}
+  options: { llm?: LLMReasoner; observations?: ConversationObservation[]; preferences?: UserPreferences } = {}
 ): Promise<RepositoryProposal> {
   if (!options.llm) {
     return { proposals: [], summary: 'No LLM configured. Set INSTRUCTION_ARCHITECT_LLM_API_KEY to enable reasoning.' };
@@ -36,6 +36,7 @@ export async function proposeRepositoryChanges(
   const context: ReasoningContext = {
     existingFiles,
     observations: options.observations,
+    preferences: options.preferences,
   };
 
   return options.llm.propose(context)

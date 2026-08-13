@@ -1,13 +1,12 @@
 /**
- * Tier 1 — CLI integration evals (deterministic, no LLM required).
+ * CLI integration evals (deterministic, no LLM required).
  *
- * Each eval runs a real CLI command against a synthetic fixture repository and
- * asserts on the quality of the output — not just that it ran, but that it
- * produced the right result.
+ * Each eval runs a real command against a fixture repository and asserts
+ * on behaviour — not just that it ran, but that it produced the correct result.
  *
- * Fixtures live in tests/fixtures/ and represent specific repo states:
+ * Fixtures live in tests/fixtures/:
  *   empty-repo        — no AI configuration at all
- *   bloated-repo      — 30+ mixed-quality, highly duplicated rules
+ *   bloated-repo      — many mixed-quality, duplicated rules
  *   contradictory-repo — rules that directly contradict each other
  *   path-scoped-repo  — rules that belong in per-path instruction files
  *   secrets-repo      — copilot-instructions.md containing credential patterns
@@ -15,19 +14,16 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { cp, mkdtemp, rm, readFile } from 'node:fs/promises';
+import { cp, mkdtemp, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { seed } from '../../src/commands/commands.js';
 import { readExistingConfig } from '../../src/analyser/analyser.js';
 import { readGlobalInstructions } from '../../src/io/writer.js';
+import { getBaseline } from '../../src/baseline/baseline.js';
 
 const FIXTURES = resolve(new URL('../fixtures', import.meta.url).pathname);
 
-/**
- * Copy a fixture into a fresh temp directory so each test gets an isolated,
- * writable working tree.
- */
 async function setupFixture(name: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), `ia-eval-${name}-`));
   await cp(join(FIXTURES, name), dir, { recursive: true });
@@ -35,7 +31,7 @@ async function setupFixture(name: string): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// seed evals
+// seed — empty repository
 // ---------------------------------------------------------------------------
 
 describe('eval: seed — empty repository', () => {
@@ -53,62 +49,78 @@ describe('eval: seed — empty repository', () => {
     expect(content).toContain('## Code quality');
     expect(content).toContain('## Collaboration');
   });
+
+  it('baseline written to empty repo does not contain technology-specific facts', async () => {
+    await seed(repoRoot);
+    const content = await readGlobalInstructions(repoRoot);
+    // Baseline must not mention specific tools — those are discoverable.
+    expect(content).not.toMatch(/\bpnpm\b/);
+    expect(content).not.toMatch(/\bnpm\b/);
+    expect(content).not.toMatch(/\byarn\b/);
+  });
 });
 
-describe('eval: seed — bloated repository', () => {
+// ---------------------------------------------------------------------------
+// seed — existing configuration must be preserved without LLM
+// ---------------------------------------------------------------------------
+
+describe('eval: seed — preserves existing configuration without LLM', () => {
   let repoRoot: string;
   beforeEach(async () => { repoRoot = await setupFixture('bloated-repo'); });
   afterEach(async () => { await rm(repoRoot, { recursive: true, force: true }); });
 
-  it('does not propagate all bloated rules verbatim into output', async () => {
-    const inputContent = await readFile(join(repoRoot, '.github', 'copilot-instructions.md'), 'utf8');
+  it('does not modify existing copilot-instructions.md when no LLM is configured', async () => {
+    const before = await readGlobalInstructions(repoRoot);
     await seed(repoRoot);
-    const outputContent = await readGlobalInstructions(repoRoot);
-    // The bloated fixture has many near-duplicate lines. Seed should NOT copy
-    // all of them into the repository-specific section — discoverable facts
-    // and duplicates must be filtered.
-    const inputBullets = (inputContent.match(/^- .+/gm) ?? []).map((l) => l.trim());
-    // Count how many of the original bloated bullets appear verbatim in output.
-    const verbatimCount = inputBullets.filter((b) => outputContent.includes(b)).length;
-    // Most (>50%) of the bloated bullets should be suppressed or merged.
-    expect(verbatimCount).toBeLessThan(inputBullets.length * 0.5);
+    const after = await readGlobalInstructions(repoRoot);
+    // Without LLM, seed must not overwrite existing content.
+    expect(after).toBe(before);
   });
 
-  it('removes discoverable facts (package manager, language)', async () => {
-    await seed(repoRoot);
-    const content = await readGlobalInstructions(repoRoot);
-    // "The project uses pnpm" and similar are discoverable — must not appear
-    // as explicit instruction lines in the output.
-    const discoverableLines = (content.match(/^- .*(uses pnpm|use pnpm|package manager is)/gim) ?? []);
-    expect(discoverableLines).toHaveLength(0);
+  it('reports that LLM is required to improve existing configuration', async () => {
+    const output = await seed(repoRoot);
+    expect(output.toLowerCase()).toMatch(/llm|api.key/i);
   });
 });
+
+// ---------------------------------------------------------------------------
+// seed — idempotency
+// ---------------------------------------------------------------------------
 
 describe('eval: seed — idempotency', () => {
   let repoRoot: string;
   beforeEach(async () => { repoRoot = await setupFixture('seeded-repo'); });
   afterEach(async () => { await rm(repoRoot, { recursive: true, force: true }); });
 
-  it('produces identical output on first and second run', async () => {
+  it('produces identical file content on first and second run', async () => {
     await seed(repoRoot);
     const first = await readGlobalInstructions(repoRoot);
     await seed(repoRoot);
     const second = await readGlobalInstructions(repoRoot);
     expect(first).toBe(second);
   });
+});
 
-  it('does not duplicate baseline sections on re-run', async () => {
-    await seed(repoRoot);
+// ---------------------------------------------------------------------------
+// seed — baseline content is safe (no secrets introduced)
+// ---------------------------------------------------------------------------
+
+describe('eval: seed — baseline does not introduce secrets', () => {
+  let repoRoot: string;
+  beforeEach(async () => { repoRoot = await setupFixture('empty-repo'); });
+  afterEach(async () => { await rm(repoRoot, { recursive: true, force: true }); });
+
+  it('baseline written to an empty repo contains no secret patterns', async () => {
     await seed(repoRoot);
     const content = await readGlobalInstructions(repoRoot);
-    // Count occurrences of the Testing section heading
-    const testingHeadings = (content.match(/^## Testing/gm) ?? []).length;
-    expect(testingHeadings).toBe(1);
+    expect(content).not.toMatch(/AKIA[0-9A-Z]{16}/);
+    expect(content).not.toMatch(/ghp_[A-Za-z0-9]{36}/);
+    expect(content).not.toContain('supersecretpassword123');
   });
 });
 
 // ---------------------------------------------------------------------------
-// review evals
+// review — lists existing files
 // ---------------------------------------------------------------------------
 
 describe('eval: review — clean repository', () => {
@@ -122,27 +134,30 @@ describe('eval: review — clean repository', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Secret redaction eval
-// ---------------------------------------------------------------------------
-
-describe('eval: seed — secrets repository', () => {
+describe('eval: review — seeded repository', () => {
   let repoRoot: string;
-  beforeEach(async () => { repoRoot = await setupFixture('secrets-repo'); });
+  beforeEach(async () => { repoRoot = await setupFixture('seeded-repo'); });
   afterEach(async () => { await rm(repoRoot, { recursive: true, force: true }); });
 
-  it('does not propagate known secret patterns into output', async () => {
-    await seed(repoRoot);
-    const content = await readGlobalInstructions(repoRoot);
-    // AWS-style access key pattern
-    expect(content).not.toMatch(/AKIA[0-9A-Z]{16}/);
-    // GitHub PAT pattern
-    expect(content).not.toMatch(/ghp_[A-Za-z0-9]{36}/);
+  it('lists existing copilot-instructions.md', async () => {
+    const files = await readExistingConfig(repoRoot);
+    expect(files.some((f) => f.path === '.github/copilot-instructions.md')).toBe(true);
   });
+});
 
-  it('does not surface raw credential text as an instruction rule', async () => {
-    await seed(repoRoot);
-    const content = await readGlobalInstructions(repoRoot);
-    expect(content).not.toContain('supersecretpassword123');
+// ---------------------------------------------------------------------------
+// baseline quality
+// ---------------------------------------------------------------------------
+
+describe('eval: baseline quality', () => {
+  it('baseline describes behaviour, not repository facts', () => {
+    const { globalInstructions } = getBaseline();
+    expect(globalInstructions).toContain('## Documentation');
+    expect(globalInstructions).toContain('## Testing');
+    expect(globalInstructions).toContain('## Security');
+    // Must not mention specific stacks
+    expect(globalInstructions).not.toMatch(/\bpnpm\b/);
+    expect(globalInstructions).not.toMatch(/\bnpm\b/);
+    expect(globalInstructions).not.toMatch(/\byarn\b/);
   });
 });

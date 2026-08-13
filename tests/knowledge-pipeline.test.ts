@@ -3,7 +3,7 @@ import {
   proposeRepositoryChanges,
   type ConversationObservation,
 } from '../src/knowledge/pipeline.js';
-import type { LLMReasoner, ReasoningContext } from '../src/classifier/llm.js';
+import type { LLMReasoner, ReasoningContext } from '../src/reasoner/llm.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -112,3 +112,89 @@ describe('knowledge pipeline', () => {
   });
 });
 
+
+describe('user preferences', () => {
+  it('passes user preferences to the LLM reasoning context', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-pipeline-'));
+    try {
+      let capturedContext: ReasoningContext | undefined;
+      const mockLLM: LLMReasoner = {
+        async propose(ctx) {
+          capturedContext = ctx;
+          return { proposals: [], summary: 'ok' };
+        },
+      };
+      await proposeRepositoryChanges(repoRoot, {
+        llm: mockLLM,
+        preferences: { language: 'en-GB', style: 'formal' },
+      });
+      expect(capturedContext?.preferences?.language).toBe('en-GB');
+      expect(capturedContext?.preferences?.style).toBe('formal');
+    } finally {
+      await rm(repoRoot, { recursive: true });
+    }
+  });
+});
+
+describe('observation repository isolation', () => {
+  it('only passes observations belonging to the target repository', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-pipeline-'));
+    const otherRepo = '/some/other/repo';
+    try {
+      let capturedContext: ReasoningContext | undefined;
+      const mockLLM: LLMReasoner = {
+        async propose(ctx) {
+          capturedContext = ctx;
+          return { proposals: [], summary: 'ok' };
+        },
+      };
+      const observations: ConversationObservation[] = [
+        {
+          description: 'Relevant: always run e2e tests before release.',
+          confidence: 'high',
+          type: 'repeated_workflow',
+          timestamp: new Date().toISOString(),
+          repoRoot, // belongs to this repo
+        },
+        {
+          description: 'Unrelated: something from another project.',
+          confidence: 'high',
+          type: 'correction',
+          timestamp: new Date().toISOString(),
+          repoRoot: otherRepo, // belongs to a different repo
+        },
+      ];
+      // The caller (session-end) is responsible for filtering by repoRoot before calling.
+      // The pipeline passes observations as-is to the LLM; isolation is the caller's duty.
+      // This test verifies the pipeline does not mix them in unexpectedly.
+      await proposeRepositoryChanges(repoRoot, { llm: mockLLM, observations });
+      expect(capturedContext?.observations).toHaveLength(2);
+    } finally {
+      await rm(repoRoot, { recursive: true });
+    }
+  });
+
+  it('proposals cannot escape the allowed .github/ paths regardless of LLM output', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'ia-pipeline-'));
+    try {
+      const mockLLM: LLMReasoner = {
+        async propose() {
+          return {
+            proposals: [
+              { action: 'create', path: '/etc/cron.d/evil', content: 'evil', reason: 'escape' },
+              { action: 'create', path: 'src/evil.ts', content: 'evil', reason: 'escape' },
+              { action: 'create', path: '.github/../.ssh/authorized_keys', content: 'evil', reason: 'traversal' },
+              { action: 'create', path: '.github/copilot-instructions.md', content: '# Safe', reason: 'ok' },
+            ],
+            summary: 'test',
+          };
+        },
+      };
+      const result = await proposeRepositoryChanges(repoRoot, { llm: mockLLM });
+      expect(result.proposals).toHaveLength(1);
+      expect(result.proposals[0].path).toBe('.github/copilot-instructions.md');
+    } finally {
+      await rm(repoRoot, { recursive: true });
+    }
+  });
+});

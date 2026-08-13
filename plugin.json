@@ -1,6 +1,6 @@
 {
   "name": "instruction-architect",
-  "description": "Continuously analyses and improves a repository's AI-development configuration. Determines what knowledge should exist, where it should live, and whether it is worth adding at all.",
+  "description": "Remembers what you and your agents learn during development and turns durable knowledge into persistent AI configuration improvements. Provides memory, context gathering, LLM reasoning, persistence and mechanical safety for Copilot configuration.",
   "version": "0.1.0",
   "author": {
     "name": "Joe Sturge",

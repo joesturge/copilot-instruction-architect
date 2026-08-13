@@ -71,7 +71,8 @@ describe('session-end.sh', () => {
     );
   });
 
-  it('applies conversation learning in automatic autonomy mode', { skip: !runSh }, async () => {
+  it('does NOT write raw observations without LLM in automatic mode', { skip: !runSh }, async () => {
+    // Without LLM reasoning, automatic mode must not persist raw observations.
     const home = await mkdtemp(join(tmpdir(), 'ia-home-'));
     const repoRoot = await mkdtemp(join(tmpdir(), 'ia-repo-'));
     try {
@@ -99,15 +100,22 @@ describe('session-end.sh', () => {
         env: {
           ...process.env,
           HOME: home,
+          // No LLM API key set.
+          INSTRUCTION_ARCHITECT_LLM_API_KEY: '',
           CLAUDE_PLUGIN_ROOT: join(new URL('..', import.meta.url).pathname),
         },
         encoding: 'utf8',
         stdio: 'pipe',
       });
 
-      const content = await readFile(join(repoRoot, '.github', 'copilot-instructions.md'), 'utf8');
-      expect(content).toContain('Conversation-learned guidance');
-      expect(content).toContain('Always update tests when changing behaviour.');
+      // The file must NOT have been created — raw observations must not be persisted.
+      let fileExists = true;
+      try {
+        await readFile(join(repoRoot, '.github', 'copilot-instructions.md'), 'utf8');
+      } catch {
+        fileExists = false;
+      }
+      expect(fileExists).toBe(false);
     } finally {
       await rm(home, { recursive: true, force: true });
       await rm(repoRoot, { recursive: true, force: true });
