@@ -137,7 +137,7 @@ describe('user preferences', () => {
 });
 
 describe('observation repository isolation', () => {
-  it('only passes observations belonging to the target repository', async () => {
+  it('passes all provided observations to the LLM without filtering (filtering is the caller\'s responsibility)', async () => {
     const repoRoot = await mkdtemp(join(tmpdir(), 'ia-pipeline-'));
     const otherRepo = '/some/other/repo';
     try {

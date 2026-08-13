@@ -79,7 +79,7 @@ describe('eval: seed — preserves existing configuration without LLM', () => {
 
   it('reports that LLM is required to improve existing configuration', async () => {
     const output = await seed(repoRoot);
-    expect(output.toLowerCase()).toMatch(/llm|api.key/i);
+    expect(output).toMatch(/llm|api[_-]?key/i);
   });
 });
 

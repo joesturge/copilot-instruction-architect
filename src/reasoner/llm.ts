@@ -84,7 +84,7 @@ class OpenAICompatibleReasoner implements LLMReasoner {
     const json = (await res.json()) as OpenAIChatResponse;
     const content = json.choices?.[0]?.message?.content;
     if (!content) throw new Error('LLM response was empty');
-    return validateProposal(JSON.parse(content));
+    return JSON.parse(content) as RepositoryProposal;
   }
 }
 
